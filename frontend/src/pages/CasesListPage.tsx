@@ -3,12 +3,32 @@ import { CaseItem } from '../types';
 import { api } from '../services/api';
 import { RiskBadge } from '../components/RiskBadge';
 import { ScrollShadowX } from '../components/ScrollShadowX';
-import { FileText, Search, ChevronRight, RefreshCw } from 'lucide-react';
+import { FileText, Search, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
 import { SectionHeading } from '../components/SectionHeading';
 
 interface CasesListPageProps {
   onSelectCase: (caseId: string) => void;
 }
+
+const EmptyState: React.FC<{ title: string; description: string }> = ({ title, description }) => (
+  <div className="p-8 text-center">
+    <FileText className="w-10 h-10 text-graphite-600 mx-auto mb-3" />
+    <p className="text-sm font-semibold text-graphite-300">{title}</p>
+    <p className="text-xs text-graphite-500 mt-1">{description}</p>
+  </div>
+);
+
+const LoadingState: React.FC = () => (
+  <div className="p-8 text-center">
+    <div className="flex flex-col items-center gap-3">
+      <div className="relative w-8 h-8">
+        <div className="absolute inset-0 border-2 border-graphite-800 rounded-full" />
+        <div className="absolute inset-0 border-2 border-brass-400 border-t-transparent border-r-transparent rounded-full animate-spin" />
+      </div>
+      <span className="text-xs text-graphite-400 font-medium">Loading cases…</span>
+    </div>
+  </div>
+);
 
 export const CasesListPage: React.FC<CasesListPageProps> = ({ onSelectCase }) => {
   const [cases, setCases] = useState<CaseItem[]>([]);
@@ -48,7 +68,7 @@ export const CasesListPage: React.FC<CasesListPageProps> = ({ onSelectCase }) =>
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <SectionHeading
           title="Cases archive"
@@ -58,19 +78,19 @@ export const CasesListPage: React.FC<CasesListPageProps> = ({ onSelectCase }) =>
 
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <div className="relative flex-1 sm:w-64">
-            <Search className="w-4 h-4 text-graphite-400 absolute left-3 top-2.5" />
+            <Search className="w-4 h-4 text-graphite-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search Case ID or Country..."
-              className="w-full bg-graphite-950 border border-graphite-800 rounded-lg pl-9 pr-3 py-2 text-xs text-graphite-200 placeholder-graphite-500 focus:outline-none focus:border-brass-500"
+              placeholder="Search Case ID or Country…"
+              className="w-full bg-graphite-950/80 border border-graphite-800/80 rounded-lg pl-9 pr-3 py-2 text-xs text-graphite-200 placeholder-graphite-500 focus:outline-none focus:border-brass-500 focus:ring-2 focus:ring-brass-500/20 transition-all"
             />
           </div>
 
           <button
             onClick={fetchCases}
-            className="p-2 rounded-lg bg-graphite-900 border border-graphite-800 text-graphite-400 hover:text-graphite-200 cursor-pointer"
+            className="p-2.5 rounded-lg bg-graphite-900/80 border border-graphite-800/80 text-graphite-400 hover:text-graphite-200 hover:border-graphite-700/60 cursor-pointer transition-all"
             title="Refresh cases"
           >
             <RefreshCw className="w-4 h-4" />
@@ -79,15 +99,15 @@ export const CasesListPage: React.FC<CasesListPageProps> = ({ onSelectCase }) =>
       </div>
 
       {/* Filter Chips */}
-      <div className="flex items-center gap-2 border-b border-graphite-800 pb-3 flex-wrap text-xs">
+      <div className="flex items-center gap-2 border-b border-graphite-800/60 pb-3 flex-wrap text-xs">
         {['ALL', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL', 'CLEARED', 'REQUIRES_INSPECTION', 'ESCALATED'].map((st) => (
           <button
             key={st}
             onClick={() => setStatusFilter(st)}
-            className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs transition-all duration-200 cursor-pointer ${
               statusFilter === st
-                ? 'bg-brass-950 text-brass-300 font-bold border border-brass-500/40'
-                : 'text-graphite-400 hover:text-graphite-200 hover:bg-graphite-900'
+                ? 'bg-brass-950/80 text-brass-300 font-bold border border-brass-500/40 shadow-sm'
+                : 'text-graphite-400 hover:text-graphite-200 hover:bg-graphite-900/60'
             }`}
           >
             {st.replace(/_/g, ' ')}
@@ -96,65 +116,64 @@ export const CasesListPage: React.FC<CasesListPageProps> = ({ onSelectCase }) =>
       </div>
 
       {/* Table */}
-      <div className="bg-graphite-900/80 border border-graphite-800 rounded-xl overflow-hidden backdrop-blur">
+      <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl overflow-hidden backdrop-blur transition-all duration-300 hover:border-graphite-700/60">
         {loading ? (
-          <div className="p-12 text-center text-xs text-graphite-400">
-            Loading cases...
-          </div>
+          <LoadingState />
         ) : filtered.length === 0 ? (
-          <div className="p-12 text-center text-xs text-graphite-400">
-            No cases match the query criteria.
-          </div>
+          <EmptyState
+            title="No cases match the query criteria"
+            description="Try adjusting your search or filter criteria."
+          />
         ) : (
           <ScrollShadowX>
             <table className="w-full text-left text-xs">
-              <thead className="bg-graphite-950/80 text-graphite-400 uppercase text-[10px] tracking-wider border-b border-graphite-800">
+              <thead className="bg-graphite-950/80 text-graphite-400 uppercase text-[10px] tracking-wider border-b border-graphite-800/60">
                 <tr>
-                  <th className="px-4 py-3">Case ID</th>
-                  <th className="px-4 py-3">Date Screened</th>
-                  <th className="px-4 py-3">Jurisdiction</th>
-                  <th className="px-4 py-3">Document</th>
-                  <th className="px-4 py-3">Risk Score</th>
-                  <th className="px-4 py-3">Recommendation</th>
-                  <th className="px-4 py-3">Officer Decision</th>
-                  <th className="px-4 py-3 text-right">Action</th>
+                  <th className="px-4 py-3 font-medium">Case ID</th>
+                  <th className="px-4 py-3 font-medium">Date Screened</th>
+                  <th className="px-4 py-3 font-medium">Jurisdiction</th>
+                  <th className="px-4 py-3 font-medium">Document</th>
+                  <th className="px-4 py-3 font-medium">Risk Score</th>
+                  <th className="px-4 py-3 font-medium">Recommendation</th>
+                  <th className="px-4 py-3 font-medium">Officer Decision</th>
+                  <th className="px-4 py-3 font-medium text-right pr-4">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-graphite-800/60">
+              <tbody className="divide-y divide-graphite-800/40">
                 {filtered.map((c) => (
                   <tr
                     key={c.id}
                     onClick={() => onSelectCase(c.id)}
-                    className="hover:bg-graphite-800/40 cursor-pointer transition-colors"
+                    className="hover:bg-graphite-800/40 cursor-pointer transition-colors duration-150"
                   >
-                    <td className="px-4 py-3 font-mono font-bold text-brass-300">
+                    <td className="px-4 py-3.5 font-mono font-semibold text-brass-300">
                       {c.case_number}
                     </td>
-                    <td className="px-4 py-3 text-graphite-400">
+                    <td className="px-4 py-3.5 text-graphite-400">
                       {new Date(c.created_at).toLocaleDateString()}
                     </td>
-                    <td className="px-4 py-3 text-graphite-300">
+                    <td className="px-4 py-3.5 text-graphite-300">
                       {c.country}
                     </td>
-                    <td className="px-4 py-3 text-graphite-400">
+                    <td className="px-4 py-3.5 text-graphite-400">
                       {c.document_type}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-graphite-200">
+                        <span className="font-semibold text-graphite-200 tabular-nums">
                           {Math.round(c.risk_score)}
                         </span>
                         <RiskBadge level={c.risk_level} size="sm" />
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-graphite-400 truncate max-w-xs">
+                    <td className="px-4 py-3.5 text-graphite-400 truncate max-w-xs">
                       {c.recommendation}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3.5">
                       <RiskBadge status={c.officer_decision} size="sm" />
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <button className="text-brass-400 hover:text-brass-200 font-bold flex items-center gap-1 ml-auto">
+                    <td className="px-4 py-3.5 text-right pr-4">
+                      <button className="text-brass-400 hover:text-brass-200 font-semibold flex items-center gap-1 ml-auto transition-colors">
                         <span>Inspect</span>
                         <ChevronRight className="w-3.5 h-3.5" />
                       </button>

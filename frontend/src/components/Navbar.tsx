@@ -44,14 +44,14 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onScenarioLoaded }) 
           <h2 className="text-[15px] font-semibold text-graphite-100 truncate">
             {titles[currentTab] || 'BorderMesh Screening'}
           </h2>
-          <span className="hidden sm:inline text-xs text-graphite-500 shrink-0 pl-2.5 border-l border-graphite-800">
+          <span className="hidden sm:inline text-xs text-graphite-500 shrink-0 pl-2.5 border-l border-graphite-800/60">
             Station #04, Immigration Gateway
           </span>
         </div>
 
         <div className="flex items-center gap-3 text-xs text-graphite-400 shrink-0">
           <span className="hidden md:inline font-mono tabular-nums">{timeStr}</span>
-          <div className="flex items-center gap-1.5 md:pl-3 md:border-l md:border-graphite-800">
+          <div className="flex items-center gap-1.5 md:pl-3 md:border-l md:border-graphite-800/60">
             <User className="w-3.5 h-3.5 text-graphite-500" />
             <span>Officer-Demo-01</span>
           </div>

@@ -23,6 +23,20 @@ interface MRZValidatorProps {
 // constant across the Python backend and this TypeScript frontend.
 const NON_MRZ_DOCUMENT_TYPES = new Set(['AADHAAR', 'PAN', 'DRIVING_LICENSE', 'VOTER_ID', 'VISA']);
 
+const EmptyState: React.FC<{ variant: 'expected' | 'missing' }> = ({ variant }) => (
+  <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-6 backdrop-blur text-center transition-all duration-300 hover:border-graphite-700/60">
+    <div className={`flex items-center justify-center gap-2 mb-2 text-sm font-semibold ${variant === 'expected' ? 'text-graphite-400' : 'text-amber-400'}`}>
+      {variant === 'expected' ? <Info className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+      <span>MRZ extraction</span>
+    </div>
+    <p className="text-xs text-graphite-500">
+      {variant === 'expected'
+        ? 'Not applicable for this document type — no ICAO 9303 Machine Readable Zone by design.'
+        : 'No Machine Readable Zone (MRZ) detected or parsed.'}
+    </p>
+  </div>
+);
+
 export const MRZValidator: React.FC<MRZValidatorProps> = ({ mrz, validation, documentType }) => {
   if (!mrz) {
     // Absent by design for a document type that never carries an ICAO 9303
@@ -32,42 +46,18 @@ export const MRZValidator: React.FC<MRZValidatorProps> = ({ mrz, validation, doc
     // (passport) with no detected MRZ is a real, worth-flagging problem.
     const isExpectedToBeAbsent = documentType ? NON_MRZ_DOCUMENT_TYPES.has(documentType.toUpperCase()) : false;
 
-    if (isExpectedToBeAbsent) {
-      return (
-        <div className="bg-graphite-900/80 border border-graphite-800 rounded-xl p-5 backdrop-blur text-center">
-          <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-graphite-400">
-            <Info className="w-4 h-4" />
-            <span>MRZ extraction</span>
-          </div>
-          <p className="text-xs text-graphite-500">
-            Not applicable for this document type — no ICAO 9303 Machine Readable Zone by design.
-          </p>
-        </div>
-      );
-    }
-
-    return (
-      <div className="bg-graphite-900/80 border border-graphite-800 rounded-xl p-5 backdrop-blur text-center">
-        <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-amber-400">
-          <AlertTriangle className="w-4 h-4" />
-          <span>MRZ extraction</span>
-        </div>
-        <p className="text-xs text-graphite-500">
-          No Machine Readable Zone (MRZ) detected or parsed.
-        </p>
-      </div>
-    );
+    return <EmptyState variant={isExpectedToBeAbsent ? 'expected' : 'missing'} />;
   }
 
   return (
-    <div className="bg-graphite-900/80 border border-graphite-800 rounded-xl p-5 backdrop-blur space-y-4">
+    <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-5 backdrop-blur space-y-5 transition-all duration-300 hover:border-graphite-700/60">
       <SectionHeading
         level="h3"
         title="ICAO 9303 MRZ validation"
         icon={<Binary className="w-4 h-4 text-graphite-500" />}
         action={
           <span
-            className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ${
+            className={`text-xs font-semibold px-3 py-1 rounded-full border ${
               mrz.is_valid
                 ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40'
                 : 'bg-rose-950/60 text-rose-300 border-rose-500/40'
@@ -79,34 +69,34 @@ export const MRZValidator: React.FC<MRZValidatorProps> = ({ mrz, validation, doc
       />
 
       {/* Raw MRZ Lines Display */}
-      <div className="p-3 rounded-lg bg-graphite-950 border border-graphite-800 space-y-1">
+      <div className="p-4 rounded-lg bg-graphite-950/60 border border-graphite-800/80 space-y-2">
         <span className="text-[10px] text-graphite-400 block mb-1">
           Format: {mrz.format} (2 lines x 44 chars)
         </span>
-        <div className="font-mono text-xs sm:text-sm tracking-widest text-graphite-200 break-all select-all font-semibold">
+        <div className="font-mono text-xs sm:text-sm tracking-widest text-graphite-200 break-all select-all font-semibold p-2 bg-graphite-900/50 rounded border border-graphite-800/60">
           {mrz.line1}
         </div>
-        <div className="font-mono text-xs sm:text-sm tracking-widest text-graphite-200 break-all select-all font-semibold">
+        <div className="font-mono text-xs sm:text-sm tracking-widest text-graphite-200 break-all select-all font-semibold p-2 bg-graphite-900/50 rounded border border-graphite-800/60">
           {mrz.line2}
         </div>
       </div>
 
       {/* Checksums Matrix */}
       <div>
-        <h4 className="text-xs font-medium text-graphite-400 mb-2">
+        <h4 className="text-xs font-medium text-graphite-400 mb-3">
           ICAO 9303 7-3-1 checksum matrix
         </h4>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {mrz.checksums.map((cs, idx) => {
             const isValid = cs.valid;
             return (
               <div
                 key={idx}
-                className={`p-2.5 rounded-lg border flex items-center justify-between ${
+                className={`p-3 rounded-lg border flex items-center justify-between transition-colors ${
                   isValid
-                    ? 'bg-graphite-950/50 border-graphite-800/80 text-graphite-200'
-                    : 'bg-rose-950/30 border-rose-500/40 text-rose-200'
+                    ? 'bg-graphite-950/60 border-graphite-800/80 text-graphite-200 hover:border-emerald-500/30'
+                    : 'bg-rose-950/40 border-rose-500/40 text-rose-200 hover:border-rose-500/50'
                 }`}
               >
                 <div className="flex items-center gap-2">
@@ -126,7 +116,7 @@ export const MRZValidator: React.FC<MRZValidatorProps> = ({ mrz, validation, doc
                 </div>
 
                 <span
-                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded ${
                     isValid
                       ? 'bg-emerald-950/80 text-emerald-300'
                       : 'bg-rose-950/80 text-rose-300'
@@ -142,8 +132,8 @@ export const MRZValidator: React.FC<MRZValidatorProps> = ({ mrz, validation, doc
 
       {/* Document Rules Engine Summary if available */}
       {validation && (
-        <div className="pt-2 border-t border-graphite-800/80">
-          <div className="flex items-center justify-between text-xs text-graphite-400 mb-2">
+        <div className="pt-3 border-t border-graphite-800/60 animate-fade-in">
+          <div className="flex items-center justify-between text-xs text-graphite-400 mb-3">
             <span>Rules Engine Consistency:</span>
             <span>
               <strong className="text-emerald-400">{validation.passed_count} Passed</strong> /{' '}
@@ -153,16 +143,18 @@ export const MRZValidator: React.FC<MRZValidatorProps> = ({ mrz, validation, doc
             </span>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {validation.rules_detail.map((rule, idx) => (
               <div
                 key={idx}
-                className={`text-[11px] p-2 rounded flex items-center justify-between ${
-                  rule.passed ? 'bg-graphite-950/40 text-graphite-400' : 'bg-rose-950/40 border border-rose-900/60 text-rose-300'
+                className={`text-[11px] p-2.5 rounded-lg flex items-center justify-between transition-colors ${
+                  rule.passed
+                    ? 'bg-graphite-950/50 text-graphite-400 hover:bg-graphite-950/80'
+                    : 'bg-rose-950/40 border border-rose-900/60 text-rose-300 hover:bg-rose-950/50'
                 }`}
               >
                 <span>{rule.explanation}</span>
-                <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${rule.passed ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${rule.passed ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {rule.passed ? 'PASS' : 'FAIL'}
                 </span>
               </div>

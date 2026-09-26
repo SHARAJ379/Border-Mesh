@@ -3,10 +3,6 @@ import { OCRResult } from '../types';
 import { FileText, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
 import { SectionHeading } from './SectionHeading';
 
-interface OCRResultsProps {
-  data?: OCRResult;
-}
-
 // Per UIDAI convention (and this app's own DPDP-dashboard-documented
 // identifier-hashing control): mask a displayed Aadhaar number to only its
 // last 4 digits, grouped 4-4-4 with "X" placeholders (e.g. "XXXX XXXX
@@ -25,13 +21,17 @@ function maskAadhaarNumber(value: string): string {
   return [...maskedGroups, last4].join(' ');
 }
 
+interface OCRResultsProps {
+  data?: OCRResult;
+}
+
 export const OCRResults: React.FC<OCRResultsProps> = ({ data }) => {
   const [showRaw, setShowRaw] = useState(false);
   const [copied, setCopied] = useState(false);
 
   if (!data) {
     return (
-      <div className="p-4 rounded-xl bg-graphite-900/60 border border-graphite-800 text-center text-xs text-graphite-500">
+      <div className="p-5 rounded-xl bg-graphite-900/60 border border-graphite-800/80 text-center text-xs text-graphite-500">
         No OCR extraction data recorded.
       </div>
     );
@@ -62,21 +62,21 @@ export const OCRResults: React.FC<OCRResultsProps> = ({ data }) => {
   const confPercent = Math.round(data.confidence * 100);
 
   return (
-    <div className="bg-graphite-900/80 border border-graphite-800 rounded-xl p-5 backdrop-blur space-y-4">
+    <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-5 backdrop-blur space-y-5 transition-all duration-300 hover:border-graphite-700/60">
       <SectionHeading
         level="h3"
         title="OCR extraction"
         icon={<FileText className="w-4 h-4 text-graphite-500" />}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {data.fields.document_type && (
-              <span className="text-xs font-semibold text-graphite-300 px-2 py-0.5 rounded bg-graphite-800 border border-graphite-700">
+              <span className="text-xs font-semibold text-graphite-300 px-2.5 py-1 rounded-lg bg-graphite-800/60 border border-graphite-700">
                 {data.fields.document_type}
               </span>
             )}
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-graphite-500">Confidence:</span>
-              <span className="text-xs font-semibold text-graphite-200 px-2 py-0.5 rounded bg-graphite-800 border border-graphite-700">
+              <span className="text-xs font-semibold text-graphite-200 px-2.5 py-1 rounded-lg bg-graphite-800/60 border border-graphite-700">
                 {confPercent}%
               </span>
             </div>
@@ -85,13 +85,13 @@ export const OCRResults: React.FC<OCRResultsProps> = ({ data }) => {
       />
 
       {/* Field Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {fields.map((f, i) => (
-          <div key={i} className="p-2.5 rounded-lg bg-graphite-950/70 border border-graphite-800/80">
+          <div key={i} className="p-3 rounded-lg bg-graphite-950/70 border border-graphite-800/80 transition-colors hover:border-graphite-700/60">
             <span className="text-[10px] text-graphite-400 uppercase tracking-wider block">
               {f.label}
             </span>
-            <span className="text-xs font-mono font-medium text-graphite-200 truncate block mt-0.5">
+            <span className="text-xs font-mono font-medium text-graphite-200 truncate block mt-1">
               {f.value}
             </span>
           </div>
@@ -99,26 +99,27 @@ export const OCRResults: React.FC<OCRResultsProps> = ({ data }) => {
       </div>
 
       {/* Raw Text Accordion */}
-      <div className="pt-2 border-t border-graphite-800/80">
+      <div className="pt-3 border-t border-graphite-800/60">
         <button
           onClick={() => setShowRaw(!showRaw)}
-          className="flex items-center justify-between w-full text-xs text-graphite-400 hover:text-graphite-200 transition-colors py-1 cursor-pointer"
+          className="flex items-center justify-between w-full text-xs text-graphite-400 hover:text-graphite-200 transition-colors py-2 cursor-pointer"
         >
           <span>Raw Extracted OCR Buffer ({data.detected_lines?.length ?? 0} lines)</span>
           {showRaw ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         </button>
 
         {showRaw && (
-          <div className="mt-2 relative">
-            <pre className="p-3 rounded-lg bg-graphite-950 text-graphite-300 font-mono text-[11px] leading-relaxed overflow-x-auto max-h-48 border border-graphite-800 select-all">
+          <div className="mt-3 relative animate-fade-in">
+            <pre className="p-4 rounded-lg bg-graphite-950 text-graphite-300 font-mono text-[11px] leading-relaxed overflow-x-auto max-h-56 border border-graphite-800/80 select-all">
               {data.raw_text}
             </pre>
             <button
               onClick={handleCopy}
-              className="absolute top-2 right-2 p-1.5 rounded bg-graphite-800/80 hover:bg-graphite-700 text-graphite-300 text-xs flex items-center gap-1 cursor-pointer"
+              className="absolute top-3 right-3 p-2 rounded-lg bg-graphite-800/80 hover:bg-graphite-700 text-graphite-300 text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
               title="Copy raw text"
             >
-              {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">{copied ? 'Copied' : 'Copy'}</span>
             </button>
           </div>
         )}

@@ -80,9 +80,9 @@ export const CaseHeader: React.FC<CaseHeaderProps> = ({
   const createdFormatted = new Date(caseData.created_at).toLocaleString();
 
   return (
-    <div className="bg-graphite-900/90 border border-graphite-800 rounded-xl p-5 shadow-lg backdrop-blur space-y-4">
+    <div className="bg-graphite-900/90 border border-graphite-800/80 rounded-xl p-5 shadow-lg shadow-brass-950/20 backdrop-blur space-y-5 transition-all duration-300 hover:border-graphite-700/60">
       {/* Top Banner */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-graphite-800">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-graphite-800/60">
         <div>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-xl sm:text-2xl font-bold font-mono text-graphite-100 tracking-wider">
@@ -120,14 +120,14 @@ export const CaseHeader: React.FC<CaseHeaderProps> = ({
             <button
               onClick={handlePurgeBiometrics}
               disabled={purging}
-              className="text-graphite-400 hover:text-amber-400 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="text-graphite-400 hover:text-amber-400 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 px-2 py-1 rounded-lg hover:bg-amber-950/20"
               title="Privacy-by-Design: Purge biometric image files from disk while preserving anonymized record"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              <span>{purging ? 'Purging...' : 'Purge Biometrics'}</span>
+              <span>{purging ? 'Purging…' : 'Purge Biometrics'}</span>
             </button>
           ) : (
-            <span className="text-graphite-500 italic">
+            <span className="text-graphite-500 italic px-2 py-1 rounded-lg bg-amber-950/20">
               Biometrics scrubbed
             </span>
           )}
@@ -135,7 +135,7 @@ export const CaseHeader: React.FC<CaseHeaderProps> = ({
           <button
             onClick={handleDelete}
             disabled={deleting}
-            className="text-graphite-400 hover:text-rose-400 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            className="text-graphite-400 hover:text-rose-400 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 px-2 py-1 rounded-lg hover:bg-rose-950/20"
             title="Delete entire case file"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -145,7 +145,7 @@ export const CaseHeader: React.FC<CaseHeaderProps> = ({
       </div>
 
       {/* Officer Determination Action Bar */}
-      <form onSubmit={handleSubmit} className="p-4 rounded-xl bg-graphite-950/70 border border-graphite-800/80 space-y-3">
+      <form onSubmit={handleSubmit} className="p-4 rounded-xl bg-graphite-950/70 border border-graphite-800/80 space-y-4">
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-graphite-200 flex items-center gap-1.5">
             <Shield className="w-3.5 h-3.5 text-graphite-500" />
@@ -164,7 +164,7 @@ export const CaseHeader: React.FC<CaseHeaderProps> = ({
             <select
               value={decision}
               onChange={(e) => setDecision(e.target.value as OfficerDecision)}
-              className="w-full bg-graphite-900 border border-graphite-700 rounded-lg px-3 py-2 text-xs text-graphite-200 focus:outline-none focus:border-brass-500"
+              className="w-full bg-graphite-900 border border-graphite-700 rounded-lg px-3 py-2 text-xs text-graphite-200 focus:outline-none focus:border-brass-500 focus:ring-2 focus:ring-brass-500/20 transition-all cursor-pointer"
             >
               <option value="CLEARED">CLEARED (Admit Traveler)</option>
               <option value="REQUIRES_INSPECTION">REQUIRES FURTHER INSPECTION (Secondary)</option>
@@ -182,12 +182,12 @@ export const CaseHeader: React.FC<CaseHeaderProps> = ({
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Enter officer notes or document inspection observations..."
-                className="flex-1 bg-graphite-900 border border-graphite-700 rounded-lg px-3 py-2 text-xs text-graphite-200 focus:outline-none focus:border-brass-500"
+                className="flex-1 bg-graphite-900 border border-graphite-700 rounded-lg px-3 py-2 text-xs text-graphite-200 focus:outline-none focus:border-brass-500 focus:ring-2 focus:ring-brass-500/20 transition-all"
               />
               <button
                 type="submit"
                 disabled={submitting}
-                className="px-4 py-2 rounded-lg bg-brass-600 hover:bg-brass-500 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                className="px-5 py-2 rounded-lg bg-brass-600 hover:bg-brass-500 active:bg-brass-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all duration-200 shadow-md shadow-brass-950/40 cursor-pointer shrink-0 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brass-500/50"
               >
                 <Send className="w-3 h-3" />
                 <span>Submit</span>

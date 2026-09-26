@@ -23,7 +23,8 @@ import {
   Flame,
   ScanFace,
   ListChecks,
-  History
+  History,
+  ChevronRight
 } from 'lucide-react';
 
 const DETAIL_TABS: TabItem[] = [
@@ -64,9 +65,12 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({ caseId, onBack }
   if (loading || !caseData) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-brass-400 animate-spin" />
-          <span className="text-xs text-graphite-400">Loading case file {caseId}...</span>
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative w-10 h-10">
+            <div className="absolute inset-0 border-2 border-graphite-800 rounded-full" />
+            <div className="absolute inset-0 border-2 border-brass-400 border-t-transparent border-r-transparent rounded-full animate-spin" />
+          </div>
+          <span className="text-xs text-graphite-400 font-medium tracking-wide">Loading case file {caseId}…</span>
         </div>
       </div>
     );
@@ -135,12 +139,12 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({ caseId, onBack }
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+    <div className="space-y-7 max-w-7xl mx-auto pb-12">
       {/* Navigation and Refresh Bar */}
       <div className="flex items-center justify-between">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-xs text-graphite-400 hover:text-brass-400 transition-colors cursor-pointer"
+          className="flex items-center gap-2 text-xs text-graphite-400 hover:text-brass-400 transition-colors cursor-pointer px-2 py-1.5 rounded-lg hover:bg-graphite-900/50"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Back to Screening Operations</span>
@@ -150,16 +154,16 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({ caseId, onBack }
           <button
             onClick={handleDownloadPdf}
             disabled={exportingPdf}
-            className="p-1.5 rounded-lg bg-graphite-900 border border-graphite-800 text-graphite-400 hover:text-graphite-200 transition-colors text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            className="px-3 py-1.5 rounded-lg bg-graphite-900 border border-graphite-800 text-graphite-400 hover:text-graphite-200 hover:border-graphite-700 transition-all text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brass-500/50"
             title="Download a PDF summary of this case"
           >
             {exportingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-            <span>{exportingPdf ? 'Preparing PDF...' : 'Download PDF'}</span>
+            <span>{exportingPdf ? 'Preparing PDF…' : 'Download PDF'}</span>
           </button>
 
           <button
             onClick={fetchCase}
-            className="p-1.5 rounded-lg bg-graphite-900 border border-graphite-800 text-graphite-400 hover:text-graphite-200 transition-colors text-xs flex items-center gap-1.5 cursor-pointer"
+            className="px-3 py-1.5 rounded-lg bg-graphite-900 border border-graphite-800 text-graphite-400 hover:text-graphite-200 hover:border-graphite-700 transition-all text-xs flex items-center gap-1.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brass-500/50"
             title="Refresh case data"
           >
             <RefreshCw className="w-3.5 h-3.5" />

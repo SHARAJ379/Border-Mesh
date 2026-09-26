@@ -68,7 +68,7 @@ describe('DashboardPage', () => {
       // "42" now also appears in the donut chart's centered total, so scope
       // this to the "Screened" KPI card specifically rather than asserting
       // on the bare text, which would otherwise match multiple elements.
-      const screenedCard = screen.getByText('Screened').closest('.p-4') as HTMLElement;
+      const screenedCard = screen.getByText('Screened').closest('[class*="rounded-xl"][class*="bg-graphite-900"]') as HTMLElement;
       expect(within(screenedCard).getByText('42')).toBeInTheDocument();
     });
     expect(screen.queryByText(/network error/i)).not.toBeInTheDocument();

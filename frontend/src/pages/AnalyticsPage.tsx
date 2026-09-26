@@ -13,6 +13,32 @@ import {
   LabelList
 } from 'recharts';
 
+const LoadingState: React.FC = () => (
+  <div className="flex items-center justify-center min-h-[40vh]">
+    <div className="flex flex-col items-center gap-3">
+      <div className="relative w-10 h-10">
+        <div className="absolute inset-0 border-2 border-graphite-800 rounded-full" />
+        <div className="absolute inset-0 border-2 border-brass-400 border-t-transparent border-r-transparent rounded-full animate-spin" />
+      </div>
+      <span className="text-xs text-graphite-400 font-medium tracking-wide">Loading analytics engine…</span>
+    </div>
+  </div>
+);
+
+const ErrorState: React.FC<{ message: string; onRetry: () => void }> = ({ message, onRetry }) => (
+  <div className="p-8 flex flex-col items-center gap-3 text-center max-w-sm mx-auto animate-fade-in">
+    <AlertTriangle className="w-8 h-8 text-rose-400" />
+    <p className="text-sm text-graphite-200 font-medium">Couldn't load analytics</p>
+    <p className="text-xs text-graphite-500">{message}</p>
+    <button
+      onClick={onRetry}
+      className="mt-2 px-5 py-2.5 rounded-lg bg-brass-600 hover:bg-brass-500 text-white text-xs font-semibold transition-all shadow-md shadow-brass-950/40 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brass-500/50"
+    >
+      Retry
+    </button>
+  </div>
+);
+
 export const AnalyticsPage: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,9 +55,6 @@ export const AnalyticsPage: React.FC = () => {
       const data = await api.getDashboardStats();
       setStats(data);
     } catch (err: any) {
-      // A failed fetch never sets `stats` -- without a distinct error state,
-      // the `loading || !stats` guard below kept showing the spinner forever
-      // even after `loading` itself flipped back to false here.
       setError(err?.message || 'Failed to load analytics data');
     } finally {
       setLoading(false);
@@ -39,27 +62,11 @@ export const AnalyticsPage: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="p-12 text-center text-xs text-graphite-500">
-        Loading analytics engine...
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (error || !stats) {
-    return (
-      <div className="p-12 flex flex-col items-center gap-3 text-center max-w-sm mx-auto">
-        <AlertTriangle className="w-8 h-8 text-rose-400" />
-        <p className="text-sm text-graphite-200 font-medium">Couldn't load analytics</p>
-        <p className="text-xs text-graphite-500">{error || 'No data returned from the server.'}</p>
-        <button
-          onClick={loadData}
-          className="mt-1 px-4 py-2 rounded-lg bg-brass-600 hover:bg-brass-500 text-white text-xs font-semibold transition-colors cursor-pointer"
-        >
-          Retry
-        </button>
-      </div>
-    );
+    return <ErrorState message={error || 'No data returned from the server.'} onRetry={loadData} />;
   }
 
   const docTypeData = Object.entries(stats.document_types || {}).map(([k, v]) => ({
@@ -103,7 +110,7 @@ export const AnalyticsPage: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <SectionHeading
         title="Analytics"
         description="Deep-dive telemetry into AI module triggers, latency profiles, and risk distributions."
@@ -111,19 +118,23 @@ export const AnalyticsPage: React.FC = () => {
       />
 
       {/* KPI strip */}
-      <div className="rounded-xl bg-graphite-900/80 border border-graphite-800 backdrop-blur grid grid-cols-1 sm:grid-cols-3 divide-x-0 sm:divide-x divide-y sm:divide-y-0 divide-graphite-800">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {kpis.map((kpi) => {
           const Icon = kpi.icon;
           return (
-            <div key={kpi.label} className="p-4">
-              <div className="flex items-center justify-between text-graphite-500 mb-2">
-                <span className="text-xs">{kpi.label}</span>
-                <Icon className={`w-4 h-4 ${kpi.iconColor}`} />
+            <div key={kpi.label} className="rounded-xl bg-graphite-900/90 border border-graphite-800/80 p-5 backdrop-blur transition-all duration-300 hover:border-graphite-700/60 hover:shadow-lg hover:shadow-brass-950/20">
+              <div className="flex items-start justify-between mb-3">
+                <span className="text-[11px] font-medium text-graphite-500 uppercase tracking-wider">{kpi.label}</span>
+                <div className="p-1.5 rounded-lg bg-graphite-950/60 border border-graphite-800/50">
+                  <Icon className={`w-4 h-4 ${kpi.iconColor}`} />
+                </div>
               </div>
-              <div className={`text-2xl font-bold ${kpi.color}`}>
-                {kpi.value}
+              <div className="space-y-1">
+                <div className={`text-3xl font-bold ${kpi.color} tracking-tight`}>
+                  {kpi.value}
+                </div>
+                <div className="text-[10px] text-graphite-500">{kpi.note}</div>
               </div>
-              <span className="text-xs text-graphite-500 mt-1 block">{kpi.note}</span>
             </div>
           );
         })}
@@ -131,16 +142,48 @@ export const AnalyticsPage: React.FC = () => {
 
       {/* Latency by Module & Document Breakdown -- asymmetric: latency has
           more rows, so it gets more room. */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        <div className="lg:col-span-3 bg-graphite-900/80 border border-graphite-800 rounded-xl p-5 backdrop-blur">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-7 bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-5 backdrop-blur transition-all duration-300 hover:border-graphite-700/60">
           <SectionHeading level="h3" title="Component processing latency" description="Milliseconds per pipeline module" />
-          <div className="h-64 mt-2">
+          <div className="h-64 mt-3">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={latencyBreakdown} layout="vertical" margin={{ right: 36 }}>
-                <XAxis type="number" stroke="#6B655A" fontSize={11} />
-                <YAxis type="category" dataKey="module" stroke="#8C8579" fontSize={11} width={140} />
-                <Tooltip contentStyle={{ backgroundColor: '#17171A', borderColor: '#3D3933', borderRadius: '8px', fontSize: '12px' }} itemStyle={{ color: '#EBE9E5' }} />
-                <Bar dataKey="time" fill="#5C948C" radius={[0, 4, 4, 0]}>
+                <XAxis
+                  type="number"
+                  stroke="#6B655A"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fill: '#8C8579' }}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="module"
+                  stroke="#8C8579"
+                  fontSize={11}
+                  width={140}
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fill: '#B8B3A8' }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#17171A',
+                    borderColor: '#3D3933',
+                    borderRadius: '10px',
+                    fontSize: '12px',
+                    padding: '8px 12px',
+                    boxShadow: '0 4px 24px rgba(0,0,0,0.4)'
+                  }}
+                  itemStyle={{ color: '#EBE9E5' }}
+                  formatter={(value: any) => `${value}ms`}
+                />
+                <Bar
+                  dataKey="time"
+                  fill="#5C948C"
+                  radius={[0, 6, 6, 0]}
+                  maxBarSize={32}
+                >
                   <LabelList
                     dataKey="time"
                     position="right"
@@ -154,15 +197,44 @@ export const AnalyticsPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="lg:col-span-2 bg-graphite-900/80 border border-graphite-800 rounded-xl p-5 backdrop-blur">
+        <div className="lg:col-span-5 bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-5 backdrop-blur transition-all duration-300 hover:border-graphite-700/60">
           <SectionHeading level="h3" title="Document types screened" />
-          <div className="h-64 mt-2">
+          <div className="h-64 mt-3">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={docTypeData}>
-                <XAxis dataKey="type" stroke="#6B655A" fontSize={11} />
-                <YAxis stroke="#8C8579" fontSize={11} />
-                <Tooltip contentStyle={{ backgroundColor: '#17171A', borderColor: '#3D3933', borderRadius: '8px', fontSize: '12px' }} itemStyle={{ color: '#EBE9E5' }} />
-                <Bar dataKey="count" fill="#5C948C" radius={[4, 4, 0, 0]} />
+              <BarChart data={docTypeData} margin={{ left: 8, right: 24, top: 4, bottom: 4 }}>
+                <XAxis
+                  dataKey="type"
+                  stroke="#6B655A"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fill: '#8C8579' }}
+                />
+                <YAxis
+                  stroke="#8C8579"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fill: '#B8B3A8' }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#17171A',
+                    borderColor: '#3D3933',
+                    borderRadius: '10px',
+                    fontSize: '12px',
+                    padding: '8px 12px',
+                    boxShadow: '0 4px 24px rgba(0,0,0,0.4)'
+                  }}
+                  itemStyle={{ color: '#EBE9E5' }}
+                  formatter={(value: any) => `${value}`}
+                />
+                <Bar
+                  dataKey="count"
+                  fill="#5C948C"
+                  radius={[6, 6, 0, 0]}
+                  maxBarSize={40}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>

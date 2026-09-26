@@ -65,12 +65,18 @@ export const RiskScore: React.FC<RiskScoreProps> = ({
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (Math.min(100, Math.max(0, score)) / 100) * circumference;
 
+  const sizeStyles = {
+    sm: { svg: 'w-24 h-24', score: 'text-2xl', label: 'text-sm', rec: 'text-xs', pad: 'p-4' },
+    md: { svg: 'w-32 h-32', score: 'text-3xl', label: 'text-xl', rec: 'text-sm', pad: 'p-5' },
+    lg: { svg: 'w-40 h-40', score: 'text-4xl', label: 'text-2xl', rec: 'text-base', pad: 'p-6' },
+  }[size];
+
   return (
-    <div className={`rounded-xl border ${theme.borderColor} ${theme.accentBg} p-5 backdrop-blur-sm`}>
+    <div className={`rounded-xl border ${theme.borderColor} ${theme.accentBg} ${sizeStyles.pad} backdrop-blur-sm transition-all duration-300 hover:border-current/50 hover:shadow-lg hover:shadow-current/20`}>
       <div className="flex flex-col sm:flex-row items-center gap-6">
         {/* Circular Gauge */}
-        <div className="relative flex items-center justify-center">
-          <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 120 120">
+        <div className="relative flex items-center justify-center flex-shrink-0">
+          <svg className={`${sizeStyles.svg} transform -rotate-90`} viewBox="0 0 120 120">
             {/* Background Track */}
             <circle
               cx="60"
@@ -93,6 +99,7 @@ export const RiskScore: React.FC<RiskScoreProps> = ({
               strokeDashoffset={strokeDashoffset}
               strokeLinecap="round"
               className="transition-all duration-1000 ease-out"
+              style={{ filter: 'drop-shadow(0 0 8px currentColor)' }}
             />
           </svg>
 
@@ -103,7 +110,7 @@ export const RiskScore: React.FC<RiskScoreProps> = ({
                 Medium/High boundary (e.g. 49.1), which a rounded "49"
                 visually contradicts System Settings' own stated 25-49
                 Medium band. */}
-            <span className={`text-3xl font-bold tracking-tight ${theme.textColor}`}>
+            <span className={`${sizeStyles.score} font-bold tracking-tight ${theme.textColor}`}>
               {score.toFixed(1)}
             </span>
             <span className="text-[10px] uppercase text-graphite-400 tracking-wider">
@@ -113,19 +120,19 @@ export const RiskScore: React.FC<RiskScoreProps> = ({
         </div>
 
         {/* Details & Recommendation */}
-        <div className="flex-1 text-center sm:text-left space-y-2">
+        <div className="flex-1 text-center sm:text-left space-y-3">
           <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
             <Icon className={`w-5 h-5 ${theme.textColor}`} />
-            <span className={`text-xl font-bold tracking-wider uppercase ${theme.textColor}`}>
+            <span className={`${sizeStyles.label} font-bold tracking-wider uppercase ${theme.textColor}`}>
               {level} RISK
             </span>
           </div>
 
-          <div className="p-2.5 rounded-lg bg-graphite-900/80 border border-graphite-800">
-            <p className="text-xs font-semibold text-graphite-400 uppercase tracking-wider mb-0.5">
+          <div className="p-3 rounded-lg bg-graphite-900/80 border border-graphite-800/80">
+            <p className="text-xs font-semibold text-graphite-400 uppercase tracking-wider mb-1">
               Recommended Action
             </p>
-            <p className={`text-sm font-medium ${theme.textColor}`}>
+            <p className={`${sizeStyles.rec} font-medium ${theme.textColor}`}>
               {recommendation}
             </p>
           </div>

@@ -67,7 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 key={item.id}
                 onClick={() => onSelectTab(item.id)}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
                   active
                     ? 'bg-brass-950/70 text-brass-300 border border-brass-500/30 font-semibold shadow-inner'
                     : 'text-graphite-400 hover:text-graphite-200 hover:bg-graphite-900/60 border border-transparent'
@@ -89,7 +89,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* System Status Footer */}
-      <div className="p-4 m-3 rounded-xl bg-graphite-900/80 border border-graphite-800/80 space-y-2 text-xs">
+      <div className="p-4 m-3 rounded-xl bg-graphite-900/80 border border-graphite-800/80 space-y-2 text-xs transition-all duration-300 hover:border-graphite-700/60">
         <div className="flex items-center justify-between text-graphite-300 text-[11px]">
           <span className="flex items-center gap-1.5 text-graphite-400">
             <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
@@ -101,7 +101,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span className="truncate">Watchlist Adapter</span>
           <span className="text-brass-400 shrink-0">Sandbox Demo</span>
         </div>
-        <div className="pt-1.5 border-t border-graphite-800 text-[10px] text-graphite-400">
+        <div className="pt-1.5 border-t border-graphite-800/60 text-[10px] text-graphite-400">
           SIH Problem: <span className="text-graphite-400">SIH26188</span>
         </div>
       </div>

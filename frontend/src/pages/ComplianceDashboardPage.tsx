@@ -73,6 +73,24 @@ const NOT_IMPLEMENTED = [
   'Significant Data Fiduciary obligations (DPIA, independent data auditor, Data Protection Officer).',
 ];
 
+const LoadingState: React.FC = () => (
+  <div className="flex items-center justify-center min-h-[40vh]">
+    <div className="flex flex-col items-center gap-3">
+      <div className="relative w-10 h-10">
+        <div className="absolute inset-0 border-2 border-graphite-800 rounded-full" />
+        <div className="absolute inset-0 border-2 border-brass-400 border-t-transparent border-r-transparent rounded-full animate-spin" />
+      </div>
+      <span className="text-xs text-graphite-400 font-medium tracking-wide">Loading compliance status…</span>
+    </div>
+  </div>
+);
+
+const ErrorState: React.FC<{ message: string }> = ({ message }) => (
+  <div className="bg-rose-950/40 border border-rose-500/30 rounded-xl p-4 text-xs text-rose-300 animate-fade-in">
+    {message}
+  </div>
+);
+
 export const ComplianceDashboardPage: React.FC = () => {
   const [status, setStatus] = useState<DpdpComplianceStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,19 +113,11 @@ export const ComplianceDashboardPage: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <Loader2 className="w-6 h-6 text-brass-400 animate-spin" />
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (error || !status) {
-    return (
-      <div className="bg-rose-950/40 border border-rose-500/30 rounded-xl p-4 text-xs text-rose-300">
-        {error || 'No compliance data available'}
-      </div>
-    );
+    return <ErrorState message={error || 'No compliance data available'} />;
   }
 
   const hashCoverage =
@@ -118,14 +128,14 @@ export const ComplianceDashboardPage: React.FC = () => {
       : 100;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <SectionHeading
         title="DPDP Act 2023 compliance mapping"
         description="A live view of which existing controls back which DPDP principles — not a legal compliance certification."
         icon={<Scale className="w-4 h-4 text-graphite-500" />}
       />
 
-      <div className="bg-amber-950/30 border border-amber-500/30 rounded-xl p-4 text-xs text-amber-200 flex items-start gap-2.5">
+      <div className="bg-amber-950/30 border border-amber-500/30 rounded-xl p-4 text-xs text-amber-200 flex items-start gap-2.5 animate-fade-in">
         <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
         <p>
           This page presents controls already implemented in this codebase, mapped to the DPDP Act 2023
@@ -210,7 +220,7 @@ export const ComplianceDashboardPage: React.FC = () => {
       </div>
 
       {/* Known gaps — not hidden */}
-      <div className="bg-rose-950/30 border border-rose-500/30 rounded-xl p-4 space-y-2">
+      <div className="bg-rose-950/30 border border-rose-500/30 rounded-xl p-4 space-y-2 animate-fade-in">
         <h3 className="text-sm font-semibold text-rose-300 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" />
           Known gaps
@@ -223,7 +233,7 @@ export const ComplianceDashboardPage: React.FC = () => {
       </div>
 
       {/* What's not claimed */}
-      <div className="bg-graphite-900/80 border border-graphite-800 rounded-xl p-4 space-y-2">
+      <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-4 space-y-2 transition-all duration-300 hover:border-graphite-700/60 animate-fade-in">
         <h3 className="text-sm font-semibold text-graphite-300">Not implemented — not claimed</h3>
         <ul className="text-xs text-graphite-500 space-y-1 list-disc list-inside">
           {NOT_IMPLEMENTED.map((item, i) => (
@@ -232,7 +242,7 @@ export const ComplianceDashboardPage: React.FC = () => {
         </ul>
       </div>
 
-      <p className="text-[10px] text-graphite-600">
+      <p className="text-[10px] text-graphite-500">
         Generated {new Date(status.generated_at).toLocaleString()}
       </p>
     </div>
@@ -240,10 +250,12 @@ export const ComplianceDashboardPage: React.FC = () => {
 };
 
 const PrincipleCard: React.FC<{ principle: Principle; children: React.ReactNode }> = ({ principle, children }) => (
-  <div className="bg-graphite-900/80 border border-graphite-800 rounded-xl p-4 space-y-2.5">
+  <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-4 space-y-2.5 transition-all duration-300 hover:border-graphite-700/60 animate-fade-in" style={{ animationDelay: '0ms' }}>
     <div className="flex items-start justify-between gap-2">
       <div className="flex items-center gap-2">
-        <span className="text-brass-400">{principle.icon}</span>
+        <div className="p-2 rounded-lg bg-brass-950/50 border border-brass-500/30">
+          <span className="text-brass-400">{principle.icon}</span>
+        </div>
         <span className="text-sm font-semibold text-graphite-200">{principle.name}</span>
       </div>
       <span className="inline-flex items-center gap-1.5 rounded-full font-semibold tracking-wider uppercase border text-xs px-2.5 py-1 bg-emerald-950/60 text-emerald-300 border-emerald-500/40">
@@ -253,7 +265,7 @@ const PrincipleCard: React.FC<{ principle: Principle; children: React.ReactNode 
     </div>
     <p className="text-[10px] text-graphite-500 uppercase tracking-wider">{principle.section}</p>
     <p className="text-[11px] text-graphite-400">{principle.description}</p>
-    <div className="pt-1 border-t border-graphite-800/80 space-y-1.5">{children}</div>
+    <div className="pt-1 border-t border-graphite-800/60 space-y-1.5">{children}</div>
   </div>
 );
 
