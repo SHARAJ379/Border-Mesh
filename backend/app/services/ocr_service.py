@@ -312,6 +312,18 @@ class TesseractOCRService(BaseOCRService):
         "ENTRY VISA", "BUREAU OF IMMIGRATION"
     )
 
+    # Residence/work/entry/transit permits -- like Visa, issued by this
+    # project's own fictional "Republic of Utopia" rather than modeled on
+    # any one real country's permit design, since there's no single real
+    # template to validate a generic permit against. Deliberately two-word
+    # phrases (never a bare "PERMIT" substring): a bare substring would
+    # false-positive on unrelated printed text that happens to mention a
+    # permit in passing, the same reasoning VISA_MARKERS already applies
+    # against a bare "VISA" substring.
+    PERMIT_MARKERS = (
+        "RESIDENCE PERMIT", "WORK PERMIT", "ENTRY PERMIT", "TRANSIT PERMIT"
+    )
+
     @classmethod
     def _detect_document_type(cls, raw_text: str) -> str:
         """
@@ -336,19 +348,21 @@ class TesseractOCRService(BaseOCRService):
             return "VOTER_ID"
         if any(marker in upper for marker in cls.VISA_MARKERS):
             return "VISA"
+        if any(marker in upper for marker in cls.PERMIT_MARKERS):
+            return "PERMIT"
         return "PASSPORT"
 
     # Document types with no ICAO 9303 Machine Readable Zone by design --
     # shared with screening.py (which skips the MRZ-band OCR pass for these)
     # and rules_engine.py (which treats a missing MRZ as expected, not a
     # HIGH-severity "Missing Machine Readable Zone" signal, for these). A
-    # visa is extract-only here (no MRZ format is modeled for it), same as
-    # the other three.
-    NON_MRZ_DOCUMENT_TYPES = ("AADHAAR", "PAN", "DRIVING_LICENSE", "VOTER_ID", "VISA")
+    # visa/permit is extract-only here (no MRZ format is modeled for
+    # either), same as the other three.
+    NON_MRZ_DOCUMENT_TYPES = ("AADHAAR", "PAN", "DRIVING_LICENSE", "VOTER_ID", "VISA", "PERMIT")
 
     @staticmethod
     def _extract_aadhaar_number(raw_text: str) -> Optional[str]:
-        """
+        r"""
         The printed Aadhaar (UID) is always exactly 12 digits, conventionally
         grouped as 4-4-4 with spaces -- distinct from the Enrolment Number
         (a slash-separated tracking ID also printed on the card, e.g.
@@ -546,7 +560,7 @@ class TesseractOCRService(BaseOCRService):
 
     @staticmethod
     def _extract_dl_number(raw_text: str) -> Optional[str]:
-        """
+        r"""
         The nationwide standardized ("Sarathi") Driving Licence number is a
         2-letter state code, a 2-digit RTO code, a 4-digit issue year, and a
         7-digit serial -- 15 characters total. Real printouts commonly space
@@ -710,6 +724,46 @@ class TesseractOCRService(BaseOCRService):
 
         return fields
 
+    def parse_permit_fields(self, raw_text: str, lines: List[str]) -> Dict[str, Any]:
+        """
+        Extracts structured fields from a residence/work/entry/transit
+        Permit specimen. Like Visa, a plain label-above-value layout, so
+        the existing _value_after_label helper covers every field. Permit
+        Number is extract-only, the same honest posture as Visa Number /
+        Aadhaar's document number: no checksum or structural format is
+        invented for it since no single real issuing authority's format
+        exists to check against.
+        """
+        fields: Dict[str, Any] = {
+            "full_name": None,
+            "document_number": None,
+            "nationality": None,
+            "country": "REPUBLIC OF UTOPIA",
+            "date_of_birth": None,
+            "date_of_issue": None,
+            "date_of_expiry": None,
+            "sex": None,
+            "permit_type": None,
+            "issuing_authority": None
+        }
+
+        fields["document_number"] = (
+            self._value_after_label(lines, r'\bPERMIT NUMBER\b')
+            or self._value_after_fuzzy_label(lines, ["PERMIT", "NUMBER"])
+        )
+        fields["full_name"] = self._value_after_label(lines, r'\bFULL NAME\b')
+        fields["nationality"] = self._value_after_label(lines, r'\bNATIONALITY\b')
+        fields["date_of_birth"] = self._extract_date(self._value_after_label(lines, r'\bDATE OF BIRTH\b'))
+        fields["permit_type"] = self._value_after_label(lines, r'\bPERMIT TYPE\b')
+        fields["issuing_authority"] = self._value_after_label(lines, r'\bISSUING AUTHORITY\b')
+        fields["date_of_issue"] = self._extract_date(self._value_after_label(lines, r'\bDATE OF ISSUE\b'))
+        fields["date_of_expiry"] = self._extract_date(
+            self._value_after_label(lines, r'\bDATE OF EXPIRY\b')
+            or self._value_after_fuzzy_label(lines, ["DATE", "OF", "EXPIRY"])
+        )
+
+        return fields
+
     def parse_fields_from_text(self, raw_text: str, lines: List[str]) -> Dict[str, Any]:
         """Extracts structured document fields, anchored on each field's own label line."""
         fields: Dict[str, Any] = {
@@ -799,6 +853,8 @@ class TesseractOCRService(BaseOCRService):
                 fields = self.parse_voter_id_fields(raw_text, lines)
             elif document_type == "VISA":
                 fields = self.parse_visa_fields(raw_text, lines)
+            elif document_type == "PERMIT":
+                fields = self.parse_permit_fields(raw_text, lines)
             else:
                 fields = self.parse_fields_from_text(raw_text, lines)
             fields["document_type"] = document_type

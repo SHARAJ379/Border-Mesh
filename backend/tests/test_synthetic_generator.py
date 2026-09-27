@@ -185,3 +185,47 @@ def test_generate_voter_id_card_is_recognized_by_the_real_ocr_pipeline(tmp_path)
     assert result["fields"]["full_name"] == "ANJALI NAIR"
     assert result["fields"]["date_of_birth"] == "22/04/1997"
     assert result["fields"]["sex"] == "F"
+
+
+def test_generate_permit_is_recognized_by_the_real_ocr_pipeline(tmp_path):
+    """
+    Same Tier B bar as the PAN/DL/Voter ID specimens: it must survive a
+    REAL Tesseract pass, not just look right to a human.
+    """
+    out_path = str(tmp_path / "permit.jpg")
+    SyntheticDocumentGenerator.generate_permit(
+        out_path=out_path,
+        surname="ADEYEMI",
+        given_names="TOLA",
+        nationality="ATLANTIAN",
+        doc_number="RP7734210",
+        permit_type="RESIDENCE PERMIT",
+        issuing_authority="REPUBLIC OF UTOPIA IMMIGRATION SERVICE",
+        dob_yymmdd="910304",
+        issue_yymmdd="240101",
+        expiry_yymmdd="290101",
+    )
+
+    result = TesseractOCRService().extract_text(out_path)
+    assert result["fields"]["document_type"] == "PERMIT"
+    assert result["fields"]["document_number"] == "RP7734210"
+    assert result["fields"]["full_name"] == "TOLA ADEYEMI"
+    assert result["fields"]["date_of_birth"] == "04/03/1991"
+    assert result["fields"]["date_of_expiry"] == "01/01/2029"
+
+
+def test_generate_permit_expired_mode_backdates_expiry(tmp_path):
+    """Mirrors test_generate_driving_license_expired_mode_backdates_valid_till
+    -- 'expired' mode must actually change the printed expiry, not just the
+    mode label, since the rules engine reads what's printed."""
+    out_path = str(tmp_path / "permit_expired.jpg")
+    SyntheticDocumentGenerator.generate_permit(
+        out_path=out_path,
+        mode="expired",
+        doc_number="RP7734210",
+        expiry_yymmdd="290101",
+    )
+
+    result = TesseractOCRService().extract_text(out_path)
+    assert result["fields"]["document_type"] == "PERMIT"
+    assert result["fields"]["date_of_expiry"] == "01/01/2020"

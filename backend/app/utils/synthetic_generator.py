@@ -695,3 +695,95 @@ class SyntheticDocumentGenerator:
             "given_names": given_names,
             "full_name": full_name,
         }
+
+    @classmethod
+    def generate_permit(
+        cls,
+        out_path: str,
+        mode: str = "genuine",
+        surname: str = "ADEYEMI",
+        given_names: str = "TOLA",
+        nationality: str = "ATLANTIAN",
+        doc_number: str = "RP7734210",
+        permit_type: str = "RESIDENCE PERMIT",
+        issuing_authority: str = "REPUBLIC OF UTOPIA IMMIGRATION SERVICE",
+        dob_yymmdd: str = "910304",
+        issue_yymmdd: str = "240101",
+        expiry_yymmdd: str = "290101",
+        face_photo_path: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Creates a synthetic residence/work/entry/transit Permit specimen --
+        like Visa, issued by this project's own fictional "Republic of
+        Utopia" rather than any one real country's format, since there is
+        no single real template to validate a generic permit against.
+        "RESIDENCE PERMIT" / "WORK PERMIT" / etc boilerplate drawn below is
+        what routes OCR to the permit field parser (see ocr_service.py's
+        PERMIT_MARKERS) -- deliberately a two-word phrase (never a bare
+        "PERMIT" substring), the same reasoning as VISA_MARKERS not being a
+        bare "VISA" substring.
+
+        Modes: 'genuine' (expiry_yymmdd as given) or 'expired' (the printed
+        expiry is overridden to a fixed past date, mirroring
+        generate_driving_license/generate_visa's own 'expired' mode).
+        """
+        w, h = cls.WIDTH, cls.HEIGHT
+        img = Image.new("RGB", (w, h), color=(248, 250, 252))
+        draw = ImageDraw.Draw(img)
+
+        for y in range(0, h, 12):
+            color = (230, 238, 248) if (y // 12) % 2 == 0 else (238, 244, 252)
+            draw.line([(0, y), (w, y)], fill=color, width=1)
+        for x in range(0, w, 24):
+            draw.line([(x, 0), (x, h)], fill=(240, 246, 254), width=1)
+
+        # Header banner
+        draw.rectangle([0, 0, w, 70], fill=(15, 23, 42))
+        draw.rectangle([0, 70, w, 74], fill=(59, 130, 246))
+        draw.text((25, 16), permit_type.upper(), fill=(255, 255, 255))
+        draw.text((25, 42), f"{issuing_authority.upper()} • FICTIONAL TEST SPECIMEN", fill=(148, 163, 184))
+        draw.text((w - 220, 25), "PERMIT", fill=(203, 213, 225))
+
+        # Photo
+        if face_photo_path:
+            cls._paste_photo(img, face_photo_path, 40, 100, 240, 320)
+            draw.rectangle([40, 100, 40 + 240, 100 + 320], outline=(150, 160, 180), width=2)
+        else:
+            cls._draw_avatar(draw, 40, 100, 240, 320, variant=1)
+
+        full_name = f"{given_names} {surname}".upper()
+        expiry_display = "01/01/2020" if mode == "expired" else cls._format_yymmdd_display(expiry_yymmdd)
+        fields = [
+            ("PERMIT NUMBER", doc_number),
+            ("FULL NAME", full_name),
+            ("NATIONALITY", nationality.upper()),
+            ("DATE OF BIRTH", cls._format_yymmdd_display(dob_yymmdd)),
+            ("PERMIT TYPE", permit_type.upper()),
+            ("ISSUING AUTHORITY", issuing_authority.upper()),
+            ("DATE OF ISSUE", cls._format_yymmdd_display(issue_yymmdd)),
+            ("DATE OF EXPIRY", expiry_display),
+        ]
+
+        label_font = cls._load_font(12)
+        value_font = cls._load_font(18)
+        left_text = 320
+        cur_y = 95
+        for label, val in fields:
+            draw.text((left_text, cur_y), label, fill=(100, 116, 139), font=label_font)
+            draw.text((left_text, cur_y + 18), str(val), fill=(15, 23, 42), font=value_font)
+            cur_y += 48
+
+        # Security emblem stamp watermark, matching the passport specimen's own
+        draw.ellipse([w - 180, 250, w - 40, 390], outline=(219, 234, 254), width=4)
+        draw.text((w - 165, 310), "SIMULATED\nSPECIMEN", fill=(191, 219, 254))
+
+        img.save(out_path, "JPEG", quality=95)
+
+        return {
+            "image_path": out_path,
+            "mode": mode,
+            "doc_number": doc_number,
+            "surname": surname,
+            "given_names": given_names,
+            "full_name": full_name,
+        }
