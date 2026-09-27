@@ -1,3 +1,4 @@
+import logging
 import mimetypes
 import os
 import sys
@@ -5,7 +6,9 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.core.config import settings
+from app.core.config import settings, default_secrets_still_in_use
+
+logger = logging.getLogger("bordermesh.startup")
 from app.core.database import Base, engine, SessionLocal
 from app.core.encryption import decrypt_bytes
 from app.api.routes import health, screening, cases, dashboard, demo, audit, settings as settings_routes, compliance
@@ -15,9 +18,29 @@ from contextlib import asynccontextmanager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initializes database tables and auto-seeds synthetic cases if empty."""
+    offenders = default_secrets_still_in_use()
+    if offenders:
+        message = (
+            f"[BorderMesh] Using checked-in DEMO default value(s) for: {', '.join(offenders)}. "
+            "These are publicly known (they're in the repo's own source) and provide no real "
+            "security -- override via environment variables before any non-demo use."
+        )
+        if settings.ENVIRONMENT != "development":
+            # A non-development ENVIRONMENT is this app's own explicit claim
+            # that this isn't just someone's local demo run -- refuse to
+            # boot with a publicly-known secret in that case rather than
+            # only logging a warning nobody may read before traffic starts.
+            raise RuntimeError(
+                message + f" Refusing to start with ENVIRONMENT='{settings.ENVIRONMENT}'."
+            )
+        logger.warning(message)
+
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
+        from app.services.watchlist_service import ensure_seeded
+        ensure_seeded(db)
+
         from app.models import Case
         case_count = db.query(Case).count()
         if case_count == 0:

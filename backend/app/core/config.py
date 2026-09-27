@@ -126,3 +126,35 @@ os.makedirs(os.path.join(settings.UPLOAD_DIR, "documents"), exist_ok=True)
 os.makedirs(os.path.join(settings.UPLOAD_DIR, "faces"), exist_ok=True)
 os.makedirs(os.path.join(settings.UPLOAD_DIR, "heatmaps"), exist_ok=True)
 os.makedirs(os.path.join(settings.UPLOAD_DIR, "crops"), exist_ok=True)
+
+# Every one of these ships with a real, working default so the app runs
+# out of the box for a demo -- see each field's own comment above for why
+# that's an accepted tradeoff here. The one thing that must never happen
+# silently is one of these checked-in demo values reaching a deployment
+# that ENVIRONMENT itself claims is not "development": that's the exact
+# gap that turns a known, disclosed demo credential into a real one.
+# _DEFAULT_* below are this module's own literals duplicated intentionally
+# (not imported back from the Settings field defaults) so this check keeps
+# working even if a future edit changes a default -- it should start
+# failing loudly then, not silently stop checking anything.
+_DEFAULT_SECRET_KEY = "bordermesh-sih2026-demo-secret-key-change-in-production"
+_DEFAULT_OFFICER_API_KEY = "bordermesh-sih2026-officer-key-change-in-production"
+_DEFAULT_BIOMETRIC_ENCRYPTION_KEY = "GIdlRJ4jkqQin6vgx8uDRtGQ2EXnGhbd_jIXGEjS848="
+
+
+def default_secrets_still_in_use() -> list[str]:
+    """
+    Returns the names of every setting still holding its checked-in demo
+    value. Called from main.py's startup lifespan, which logs the result
+    loudly (and, when ENVIRONMENT is not "development", refuses to start) --
+    see that call site for the enforcement half of this. Pure/side-effect-
+    free here so it can also be asserted against directly in tests.
+    """
+    offenders = []
+    if settings.SECRET_KEY == _DEFAULT_SECRET_KEY:
+        offenders.append("SECRET_KEY")
+    if settings.OFFICER_API_KEY == _DEFAULT_OFFICER_API_KEY:
+        offenders.append("OFFICER_API_KEY")
+    if settings.BIOMETRIC_ENCRYPTION_KEY == _DEFAULT_BIOMETRIC_ENCRYPTION_KEY:
+        offenders.append("BIOMETRIC_ENCRYPTION_KEY")
+    return offenders
