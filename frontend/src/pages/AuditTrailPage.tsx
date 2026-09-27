@@ -194,7 +194,7 @@ export const AuditTrailPage: React.FC<AuditTrailPageProps> = ({ onSelectCase }) 
           <button
             onClick={handleAnchorNow}
             disabled={anchoring || !verification || verification.total_records === 0}
-            className="px-4 py-2 rounded-lg bg-brass-600 hover:bg-brass-500 active:bg-brass-700 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0 transition-all duration-200 shadow-md shadow-brass-950/40"
+            className="btn-brass px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer shrink-0"
           >
             <Link2 className="w-3.5 h-3.5" />
             <span>{anchoring ? 'Publishing to testnet…' : 'Anchor now'}</span>

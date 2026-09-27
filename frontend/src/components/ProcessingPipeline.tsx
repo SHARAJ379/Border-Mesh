@@ -35,7 +35,7 @@ export const ProcessingPipeline: React.FC<ProcessingPipelineProps> = ({
             st.status === 'completed'
               ? 'bg-emerald-500 border-emerald-500 text-white'
               : st.status === 'running'
-              ? 'bg-brass-600 border-brass-600 text-white'
+              ? 'bg-brass-500 border-brass-500 text-graphite-950'
               : st.status === 'error'
               ? 'bg-rose-600 border-rose-600 text-white'
               : 'bg-graphite-900 border-graphite-700 text-graphite-500';

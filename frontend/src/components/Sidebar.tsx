@@ -40,15 +40,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <aside className="w-64 glass-panel-strong border-y-0 border-l-0 flex flex-col justify-between shrink-0 select-none z-20">
       <div>
         {/* Brand Header */}
-        <div className="p-5 border-b border-graphite-800/60 flex items-center gap-3">
-          {/* The one sanctioned gradient in the app -- a brand mark is
-              inherently a logo, not UI chrome. */}
-          <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-brass-400 to-brass-700 flex items-center justify-center shadow-lg shadow-brass-950/40 border border-brass-400/30">
+        <div className="p-5 border-b-[1.5px] border-graphite-800 flex items-center gap-3">
+          {/* Flat, hard-bordered brand mark -- a solid fill + a real black
+              border reads as a logotype block, not a soft glowing gradient. */}
+          <div className="h-9 w-9 rounded-lg bg-brass-500 flex items-center justify-center shadow-[2px_2px_0_0_rgba(0,0,0,0.7)] border-[1.5px] border-graphite-950">
             <Shield className="w-5 h-5 text-graphite-950" />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-bold text-base tracking-wider text-graphite-100">
+              <span className="font-display font-bold text-base tracking-tight text-graphite-100">
                 BORDER<span className="text-brass-400">MESH</span>
               </span>
             </div>
@@ -69,8 +69,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => onSelectTab(item.id)}
                 className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
                   active
-                    ? 'bg-brass-950/70 text-brass-300 border border-brass-500/30 font-semibold shadow-inner'
-                    : 'text-graphite-400 hover:text-graphite-200 hover:bg-graphite-900/60 border border-transparent'
+                    ? 'bg-brass-950 text-brass-300 border-[1.5px] border-brass-600 border-l-[3px] border-l-brass-500 font-semibold'
+                    : 'text-graphite-400 hover:text-graphite-200 hover:bg-graphite-900/60 border-[1.5px] border-transparent'
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -103,6 +103,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
         <div className="pt-1.5 border-t border-graphite-800/60 text-[10px] text-graphite-400">
           SIH Problem: <span className="text-graphite-400">SIH26188</span>
+        </div>
+        <div className="flex items-center gap-2.5 text-[10px] text-graphite-500 flex-wrap">
+          <a href="/welcome" className="hover:text-brass-400 transition-colors">About</a>
+          <span className="text-graphite-700">·</span>
+          <a href="/privacy" className="hover:text-brass-400 transition-colors">Privacy Policy</a>
+          <span className="text-graphite-700">·</span>
+          <a href="/terms" className="hover:text-brass-400 transition-colors">Terms</a>
         </div>
       </div>
     </aside>

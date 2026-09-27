@@ -43,7 +43,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onScenarioLoaded }) 
       {/* Main App Bar — one quiet line, no boxed chips */}
       <div className="px-6 py-3 flex items-center justify-between gap-4">
         <div className="flex items-baseline gap-2.5 min-w-0">
-          <h2 className="text-[15px] font-semibold text-graphite-100 truncate">
+          <h2 className="font-display text-[15px] font-bold tracking-tight text-graphite-100 truncate">
             {titles[currentTab] || 'BorderMesh Screening'}
           </h2>
           <span className="hidden sm:inline text-xs text-graphite-500 shrink-0 pl-2.5 border-l border-graphite-800/60">

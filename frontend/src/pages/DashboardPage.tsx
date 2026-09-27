@@ -88,7 +88,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           </div>
           <button
             onClick={fetchStats}
-            className="mt-2 px-5 py-2.5 rounded-lg bg-brass-600 hover:bg-brass-500 text-white text-xs font-semibold transition-all shadow-md shadow-brass-950/40 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brass-500/50"
+            className="btn-brass mt-2 px-5 py-2.5 rounded-lg text-xs font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-brass-500/50"
           >
             Retry
           </button>
@@ -137,7 +137,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             action={
               <button
                 onClick={onNavigateNewScreening}
-                className="bg-brass-600 hover:bg-brass-500 active:bg-brass-700 text-white px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 shadow-md shadow-brass-950/40 flex items-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brass-500/50"
+                className="btn-brass px-4 py-2.5 rounded-lg text-xs font-semibold flex items-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brass-500/50"
               >
                 <span>+ New document screening</span>
               </button>

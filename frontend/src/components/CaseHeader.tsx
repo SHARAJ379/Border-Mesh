@@ -187,7 +187,7 @@ export const CaseHeader: React.FC<CaseHeaderProps> = ({
               <button
                 type="submit"
                 disabled={submitting}
-                className="px-5 py-2 rounded-lg bg-brass-600 hover:bg-brass-500 active:bg-brass-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all duration-200 shadow-md shadow-brass-950/40 cursor-pointer shrink-0 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brass-500/50"
+                className="btn-brass px-5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0 focus:outline-none focus:ring-2 focus:ring-brass-500/50"
               >
                 <Send className="w-3 h-3" />
                 <span>Submit</span>

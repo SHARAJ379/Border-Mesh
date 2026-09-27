@@ -33,7 +33,7 @@ const ErrorState: React.FC<{ message: string; onRetry: () => void }> = ({ messag
     <p className="text-xs text-graphite-500">{message}</p>
     <button
       onClick={onRetry}
-      className="mt-2 px-5 py-2.5 rounded-lg bg-brass-600 hover:bg-brass-500 text-white text-xs font-semibold transition-all shadow-md shadow-brass-950/40 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brass-500/50"
+      className="btn-brass mt-2 px-5 py-2.5 rounded-lg text-xs font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-brass-500/50"
     >
       Retry
     </button>

@@ -23,8 +23,8 @@ export const SectionHeading: React.FC<SectionHeadingProps> = ({
 }) => {
   const titleClasses =
     level === 'h1'
-      ? 'text-lg font-semibold text-graphite-100'
-      : 'text-sm font-semibold text-graphite-200';
+      ? 'font-display text-lg font-bold tracking-tight text-graphite-100'
+      : 'font-display text-sm font-bold tracking-tight text-graphite-200';
 
   const Tag = level;
 

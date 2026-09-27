@@ -465,7 +465,7 @@ export const ScreeningPage: React.FC<ScreeningPageProps> = ({ onScreeningComplet
                 <button
                   type="button"
                   onClick={captureWebcamSnapshot}
-                  className="px-4 py-1.5 rounded-lg bg-brass-600 hover:bg-brass-500 active:bg-brass-700 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-md shadow-brass-950/40 transition-all duration-200"
+                  className="btn-brass px-4 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
                 >
                   <Camera className="w-3.5 h-3.5" />
                   <span>Snap photo</span>
@@ -543,7 +543,7 @@ export const ScreeningPage: React.FC<ScreeningPageProps> = ({ onScreeningComplet
       <button
         onClick={handleStartScreening}
         disabled={!docFile || isProcessing}
-        className="w-full bg-brass-600 hover:bg-brass-500 active:bg-brass-700 text-white font-semibold text-sm py-3.5 rounded-xl shadow-lg shadow-brass-950/40 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brass-500/50"
+        className="btn-brass w-full font-semibold text-sm py-3.5 rounded-xl flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brass-500/50"
       >
         <Play className="w-4 h-4 fill-current" />
         <span>Run full AI screening pipeline</span>

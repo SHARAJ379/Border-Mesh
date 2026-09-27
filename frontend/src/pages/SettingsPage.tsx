@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Sliders, Check, Loader2, AlertTriangle } from 'lucide-react';
+import { Settings, Sliders, Check, Loader2, AlertTriangle, Scale, ChevronRight } from 'lucide-react';
 import { api } from '../services/api';
 import { SectionHeading } from '../components/SectionHeading';
 import { ScrollReveal } from '../components/ScrollReveal';
@@ -216,13 +216,40 @@ export const SettingsPage: React.FC = () => {
           <button
             type="submit"
             disabled={saving || totalWeight !== 100}
-            className="px-6 py-2.5 rounded-lg bg-brass-600 hover:bg-brass-500 active:bg-brass-700 text-white text-xs font-semibold transition-all duration-200 shadow-md shadow-brass-950/40 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-brass-500/50"
+            className="btn-brass px-6 py-2.5 rounded-lg text-xs font-semibold cursor-pointer disabled:cursor-not-allowed flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-brass-500/50"
           >
             {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             Apply policy configuration
           </button>
         </div>
       </form>
+
+      {/* Legal & compliance -- plain link list, not a card grid, since
+          there's nothing interactive here beyond navigation. */}
+      <ScrollReveal>
+        <h3 className="text-sm font-semibold text-graphite-200 mb-3">Legal &amp; compliance</h3>
+        <div className="glass-panel rounded-xl overflow-hidden">
+          {[
+            { href: '/privacy', label: 'Privacy Policy', description: 'What data this system processes and how it is protected.' },
+            { href: '/terms', label: 'Terms & Conditions', description: 'Prototype status, known accuracy limitations, and acceptable use.' },
+          ].map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              className="flex items-center justify-between gap-3 py-3 px-4 text-xs border-b border-graphite-800/40 last:border-0 hover:bg-graphite-900/50 transition-colors group"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <Scale className="w-4 h-4 text-graphite-500 shrink-0" />
+                <div className="min-w-0">
+                  <span className="text-graphite-200 font-medium block">{link.label}</span>
+                  <span className="text-graphite-500 text-[11px] block truncate">{link.description}</span>
+                </div>
+              </div>
+              <ChevronRight className="w-3.5 h-3.5 text-graphite-600 group-hover:text-brass-400 transition-colors shrink-0" />
+            </a>
+          ))}
+        </div>
+      </ScrollReveal>
     </div>
   );
 };
