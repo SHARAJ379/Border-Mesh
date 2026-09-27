@@ -18,49 +18,24 @@ export const RiskScore: React.FC<RiskScoreProps> = ({
   const getTheme = () => {
     switch (level) {
       case 'LOW':
-        return {
-          stroke: '#10b981',
-          bgRing: 'stroke-emerald-950/40',
-          textColor: 'text-emerald-400',
-          borderColor: 'border-emerald-500/30',
-          icon: ShieldCheck,
-          accentBg: 'bg-emerald-950/20'
-        };
+        return { stroke: 'var(--color-signal-low)', textCls: 'text-signal-low', icon: ShieldCheck };
       case 'MEDIUM':
-        return {
-          stroke: '#f59e0b',
-          bgRing: 'stroke-amber-950/40',
-          textColor: 'text-amber-400',
-          borderColor: 'border-amber-500/30',
-          icon: AlertTriangle,
-          accentBg: 'bg-amber-950/20'
-        };
+        return { stroke: 'var(--color-signal-medium)', textCls: 'text-signal-medium', icon: AlertTriangle };
       case 'HIGH':
-        return {
-          stroke: '#f97316',
-          bgRing: 'stroke-orange-950/40',
-          textColor: 'text-orange-400',
-          borderColor: 'border-orange-500/30',
-          icon: ShieldAlert,
-          accentBg: 'bg-orange-950/20'
-        };
+        return { stroke: 'var(--color-signal-high)', textCls: 'text-signal-high', icon: ShieldAlert };
       case 'CRITICAL':
       default:
-        return {
-          stroke: '#f43f5e',
-          bgRing: 'stroke-rose-950/40',
-          textColor: 'text-rose-400',
-          borderColor: 'border-rose-500/40',
-          icon: ShieldX,
-          accentBg: 'bg-rose-950/25'
-        };
+        return { stroke: 'var(--color-signal-critical)', textCls: 'text-signal-critical', icon: ShieldX };
     }
   };
 
   const theme = getTheme();
   const Icon = theme.icon;
 
-  // SVG circular meter calculation
+  // Self-drawing SVG meter, the same technique as the /welcome
+  // demonstration panel's gauge -- a real forensic reading here, not a
+  // marketing device, so the arc is colored by the signal-ink severity
+  // family instead of the single accent blue.
   const radius = 52;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (Math.min(100, Math.max(0, score)) / 100) * circumference;
@@ -72,73 +47,59 @@ export const RiskScore: React.FC<RiskScoreProps> = ({
   }[size];
 
   return (
-    <div className={`rounded-xl border ${theme.borderColor} ${theme.accentBg} ${sizeStyles.pad} backdrop-blur-sm transition-all duration-300 hover:border-current/50 hover:shadow-lg hover:shadow-current/20`}>
+    <div className={`border border-hairline ${sizeStyles.pad}`}>
       <div className="flex flex-col sm:flex-row items-center gap-6">
-        {/* Circular Gauge */}
+        {/* Circular gauge */}
         <div className="relative flex items-center justify-center flex-shrink-0">
           <svg className={`${sizeStyles.svg} transform -rotate-90`} viewBox="0 0 120 120">
-            {/* Background Track */}
+            <circle cx="60" cy="60" r={radius} stroke="var(--color-hairline)" strokeWidth="1.5" fill="transparent" />
             <circle
-              cx="60"
-              cy="60"
-              r={radius}
-              stroke="currentColor"
-              strokeWidth="10"
-              fill="transparent"
-              className="text-graphite-800/80"
-            />
-            {/* Progress Arc */}
-            <circle
-              cx="60"
-              cy="60"
-              r={radius}
+              cx="60" cy="60" r={radius}
               stroke={theme.stroke}
-              strokeWidth="10"
+              strokeWidth="2"
               fill="transparent"
               strokeDasharray={circumference}
               strokeDashoffset={strokeDashoffset}
-              strokeLinecap="round"
+              strokeLinecap="square"
               className="transition-all duration-1000 ease-out"
-              style={{ filter: 'drop-shadow(0 0 8px currentColor)' }}
             />
           </svg>
 
-          {/* Centered Score */}
           <div className="absolute flex flex-col items-center justify-center text-center">
             {/* One decimal place, not a rounded integer -- an isolated
                 CRITICAL signal floors the true score to just above the
                 Medium/High boundary (e.g. 49.1), which a rounded "49"
                 visually contradicts System Settings' own stated 25-49
                 Medium band. */}
-            <span className={`${sizeStyles.score} font-bold tracking-tight ${theme.textColor}`}>
+            <span className={`font-display ${sizeStyles.score} text-ink`}>
               {score.toFixed(1)}
             </span>
-            <span className="text-[10px] uppercase text-graphite-400 tracking-wider">
+            <span className="text-[10px] uppercase text-muted tracking-[0.06em]">
               / 100
             </span>
           </div>
         </div>
 
-        {/* Details & Recommendation */}
+        {/* Details & recommendation */}
         <div className="flex-1 text-center sm:text-left space-y-3">
           <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-            <Icon className={`w-5 h-5 ${theme.textColor}`} />
-            <span className={`${sizeStyles.label} font-bold tracking-wider uppercase ${theme.textColor}`}>
+            <Icon className={`w-4 h-4 ${theme.textCls}`} strokeWidth={1.75} />
+            <span className={`${sizeStyles.label} font-bold uppercase tracking-[0.04em] ${theme.textCls}`}>
               {level} RISK
             </span>
           </div>
 
-          <div className="p-3 rounded-lg bg-graphite-900/80 border border-graphite-800/80">
-            <p className="text-xs font-semibold text-graphite-400 uppercase tracking-wider mb-1">
+          <div className="border-t border-hairline pt-3">
+            <p className="label-eyebrow mb-1">
               Recommended Action
             </p>
-            <p className={`${sizeStyles.rec} font-medium ${theme.textColor}`}>
+            <p className={`${sizeStyles.rec} font-bold ${theme.textCls}`}>
               {recommendation}
             </p>
           </div>
 
-          <p className="text-[11px] text-graphite-400 flex items-center gap-1.5">
-            <Info className="w-3 h-3 shrink-0" /> AI decision-support indicator. Final border determination rests with the screening officer.
+          <p className="text-[11px] text-muted flex items-center gap-1.5">
+            <Info className="w-3 h-3 shrink-0" strokeWidth={1.75} /> AI decision-support indicator. Final border determination rests with the screening officer.
           </p>
         </div>
       </div>

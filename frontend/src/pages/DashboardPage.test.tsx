@@ -65,11 +65,12 @@ describe('DashboardPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /retry/i }));
 
     await waitFor(() => {
-      // "42" now also appears in the donut chart's centered total, so scope
-      // this to the "Screened" KPI card specifically rather than asserting
-      // on the bare text, which would otherwise match multiple elements.
-      const screenedCard = screen.getByText('Screened').closest('[class*="rounded-xl"][class*="glass-panel"]') as HTMLElement;
-      expect(within(screenedCard).getByText('42')).toBeInTheDocument();
+      // The KPI strip's own container -- a plain hairline-bounded div, not
+      // a "card" -- scoped so this doesn't rely on any risk distribution
+      // row that might also show a raw count.
+      const screenedLabel = screen.getByText('Screened');
+      const kpiCell = screenedLabel.parentElement as HTMLElement;
+      expect(within(kpiCell).getByText('42')).toBeInTheDocument();
     });
     expect(screen.queryByText(/network error/i)).not.toBeInTheDocument();
     expect(api.getDashboardStats).toHaveBeenCalledTimes(2);

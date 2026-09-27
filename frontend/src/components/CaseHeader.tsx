@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CaseDetail, OfficerDecision } from '../types';
 import { RiskBadge } from './RiskBadge';
-import { Shield, Clock, Globe, FileText, CheckCircle, AlertTriangle, Send, Trash2 } from 'lucide-react';
+import { Shield, Clock, Globe, FileText, CheckCircle, Send, Trash2 } from 'lucide-react';
 import { api } from '../services/api';
 
 interface CaseHeaderProps {
@@ -80,54 +80,57 @@ export const CaseHeader: React.FC<CaseHeaderProps> = ({
   const createdFormatted = new Date(caseData.created_at).toLocaleString();
 
   return (
-    <div className="glass-panel rounded-xl p-5 space-y-5">
-      {/* Top Banner */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-graphite-800/60">
+    <div className="border border-hairline p-5 space-y-5">
+      {/* Top banner */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-hairline">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-xl sm:text-2xl font-bold font-mono text-graphite-100 tracking-wider">
+            <h1 className="figure text-xl sm:text-2xl font-bold text-ink tracking-tight">
               {caseData.case_number}
             </h1>
             <RiskBadge level={caseData.risk_level} size="md" />
             <RiskBadge status={caseData.status} size="md" />
             {caseData.biometrics_purged && (
-              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-950/80 border border-amber-500/40 text-amber-300 flex items-center gap-1.5">
-                <CheckCircle className="w-3.5 h-3.5 text-amber-400" />
+              <span className="badge-signal badge-medium text-[11px] flex items-center gap-1.5">
+                <CheckCircle className="w-3.5 h-3.5" strokeWidth={1.75} />
                 Biometrics Purged (GDPR)
               </span>
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-4 text-xs text-graphite-400 mt-2">
+          <div className="flex flex-wrap items-center gap-4 text-[11px] text-ink-soft mt-2">
             <span className="flex items-center gap-1.5">
-              <Globe className="w-3.5 h-3.5 text-graphite-500" />
+              <Globe className="w-3.5 h-3.5 text-muted" strokeWidth={1.75} />
               {caseData.country || 'Unknown Jurisdiction'}
             </span>
             <span className="flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-graphite-500" />
+              <FileText className="w-3.5 h-3.5 text-muted" strokeWidth={1.75} />
               {caseData.document_type}
             </span>
             <span className="flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-graphite-500" />
+              <Clock className="w-3.5 h-3.5 text-muted" strokeWidth={1.75} />
               {createdFormatted}
             </span>
           </div>
         </div>
 
-        {/* Action Controls -- kept low-emphasis so they don't compete with the case's own risk content */}
-        <div className="flex items-center gap-3 text-xs">
+        {/* Action controls -- kept low-emphasis so they don't compete with
+            the case's own risk content; no color-coded danger fill, but a
+            confirm() step gates both, consistent with the system's overall
+            restraint (see the design-review discussion in git history). */}
+        <div className="flex items-center gap-4 text-[11px] uppercase tracking-[0.05em]">
           {!caseData.biometrics_purged ? (
             <button
               onClick={handlePurgeBiometrics}
               disabled={purging}
-              className="text-graphite-400 hover:text-amber-400 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 px-2 py-1 rounded-lg hover:bg-amber-950/20"
+              className="text-ink-soft hover:text-signal-medium transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               title="Privacy-by-Design: Purge biometric image files from disk while preserving anonymized record"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
               <span>{purging ? 'Purging…' : 'Purge Biometrics'}</span>
             </button>
           ) : (
-            <span className="text-graphite-500 italic px-2 py-1 rounded-lg bg-amber-950/20">
+            <span className="text-muted italic">
               Biometrics scrubbed
             </span>
           )}
@@ -135,36 +138,36 @@ export const CaseHeader: React.FC<CaseHeaderProps> = ({
           <button
             onClick={handleDelete}
             disabled={deleting}
-            className="text-graphite-400 hover:text-rose-400 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 px-2 py-1 rounded-lg hover:bg-rose-950/20"
+            className="text-ink-soft hover:text-signal-critical transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             title="Delete entire case file"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
             <span>Delete Case</span>
           </button>
         </div>
       </div>
 
-      {/* Officer Determination Action Bar */}
-      <form onSubmit={handleSubmit} className="p-4 rounded-xl bg-graphite-950/70 border border-graphite-800/80 space-y-4">
+      {/* Officer determination */}
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-graphite-200 flex items-center gap-1.5">
-            <Shield className="w-3.5 h-3.5 text-graphite-500" />
+          <span className="text-[13px] font-bold text-ink flex items-center gap-1.5">
+            <Shield className="w-3.5 h-3.5 text-muted" strokeWidth={1.75} />
             Screening officer determination
           </span>
-          <span className="text-xs text-graphite-500">
+          <span className="text-[11px] text-muted">
             Recorded by: OFFICER-DEMO-01
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label className="text-[10px] text-graphite-400 uppercase tracking-wider block mb-1">
+            <label className="label-eyebrow block mb-1.5">
               Officer Action
             </label>
             <select
               value={decision}
               onChange={(e) => setDecision(e.target.value as OfficerDecision)}
-              className="w-full bg-graphite-900 border border-graphite-700 rounded-lg px-3 py-2 text-xs text-graphite-200 focus:outline-none focus:border-brass-500 focus:ring-2 focus:ring-brass-500/20 transition-all cursor-pointer"
+              className="field w-full cursor-pointer"
             >
               <option value="CLEARED">CLEARED (Admit Traveler)</option>
               <option value="REQUIRES_INSPECTION">REQUIRES FURTHER INSPECTION (Secondary)</option>
@@ -173,23 +176,23 @@ export const CaseHeader: React.FC<CaseHeaderProps> = ({
           </div>
 
           <div className="sm:col-span-2">
-            <label className="text-[10px] text-graphite-400 uppercase tracking-wider block mb-1">
+            <label className="label-eyebrow block mb-1.5">
               Inspection Notes / Justification
             </label>
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <input
                 type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Enter officer notes or document inspection observations..."
-                className="flex-1 bg-graphite-900 border border-graphite-700 rounded-lg px-3 py-2 text-xs text-graphite-200 focus:outline-none focus:border-brass-500 focus:ring-2 focus:ring-brass-500/20 transition-all"
+                className="field flex-1"
               />
               <button
                 type="submit"
                 disabled={submitting}
-                className="btn-brass px-5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0 focus:outline-none focus:ring-2 focus:ring-brass-500/50"
+                className="btn-primary px-5 py-2 text-[11px] font-bold flex items-center gap-1.5 cursor-pointer shrink-0"
               >
-                <Send className="w-3 h-3" />
+                <Send className="w-3 h-3" strokeWidth={1.75} />
                 <span>Submit</span>
               </button>
             </div>

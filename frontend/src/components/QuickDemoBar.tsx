@@ -38,17 +38,17 @@ export const QuickDemoBar: React.FC<QuickDemoBarProps> = ({ onScenarioLoaded }) 
   };
 
   return (
-    <div className="border-b border-graphite-800/60 px-6 py-1.5 flex flex-wrap items-center gap-3 text-xs">
-      <span className="text-graphite-500 shrink-0">Demo scenario:</span>
+    <div className="border-b border-hairline px-6 py-1.5 flex flex-wrap items-center gap-3 text-[11px]">
+      <span className="text-muted shrink-0 uppercase tracking-[0.06em]">Demo scenario:</span>
 
       <select
         value={selectedScenario}
         onChange={(e) => setSelectedScenario(e.target.value)}
         disabled={loading}
-        className="bg-transparent text-graphite-300 border-0 py-0.5 focus:outline-none disabled:opacity-50 cursor-pointer max-w-xs sm:max-w-sm"
+        className="bg-transparent text-ink-soft border-0 py-0.5 focus:outline-none disabled:opacity-50 cursor-pointer max-w-xs sm:max-w-sm"
       >
         {scenarios.map((sc) => (
-          <option key={sc.key} value={sc.key} className="bg-graphite-900">
+          <option key={sc.key} value={sc.key}>
             {sc.label} — {sc.desc}
           </option>
         ))}
@@ -57,16 +57,16 @@ export const QuickDemoBar: React.FC<QuickDemoBarProps> = ({ onScenarioLoaded }) 
       <button
         onClick={handleRun}
         disabled={loading}
-        className="flex items-center gap-1.5 text-brass-400 hover:text-brass-300 font-medium transition-colors disabled:opacity-50 shrink-0 cursor-pointer ml-auto"
+        className="flex items-center gap-1.5 text-accent hover:opacity-70 font-bold uppercase tracking-[0.06em] transition-opacity disabled:opacity-50 shrink-0 cursor-pointer ml-auto"
       >
         {loading ? (
           <>
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />
             <span>Running…</span>
           </>
         ) : (
           <>
-            <Play className="w-3.5 h-3.5 fill-current" />
+            <Play className="w-3.5 h-3.5 fill-current" strokeWidth={1.75} />
             <span>Run</span>
           </>
         )}

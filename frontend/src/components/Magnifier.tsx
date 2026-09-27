@@ -65,17 +65,45 @@ export const Magnifier: React.FC<MagnifierProps> = ({
   const [enabled] = useState(() => !prefersReducedMotion() && !isCoarsePointer());
 
   const handleMove = (e: React.PointerEvent<HTMLImageElement>) => {
-    const rect = imgRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const relX = Math.min(Math.max(e.clientX - rect.left, 0), rect.width);
-    const relY = Math.min(Math.max(e.clientY - rect.top, 0), rect.height);
+    const img = imgRef.current;
+    const rect = img?.getBoundingClientRect();
+    if (!img || !rect || !img.naturalWidth || !img.naturalHeight) return;
+
+    // The <img> element's own box (rect) is NOT the same as the rendered
+    // image content whenever `object-fit: contain` letterboxes it -- a
+    // document's natural aspect ratio rarely matches a CSS-forced box
+    // ratio (e.g. this app's aspect-[3/4]/aspect-[4/5] panels), so the
+    // box has blank gutters the pointer math must not treat as image
+    // content. Derive the actual rendered content rect from
+    // naturalWidth/naturalHeight, the same way the browser's own
+    // object-fit: contain layout does.
+    const boxRatio = rect.width / rect.height;
+    const imgRatio = img.naturalWidth / img.naturalHeight;
+
+    let contentWidth = rect.width;
+    let contentHeight = rect.height;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (imgRatio > boxRatio) {
+      // Image is relatively wider than the box -- letterboxed top/bottom.
+      contentHeight = rect.width / imgRatio;
+      offsetY = (rect.height - contentHeight) / 2;
+    } else if (imgRatio < boxRatio) {
+      // Image is relatively taller than the box -- letterboxed left/right.
+      contentWidth = rect.height * imgRatio;
+      offsetX = (rect.width - contentWidth) / 2;
+    }
+
+    const relX = Math.min(Math.max(e.clientX - rect.left - offsetX, 0), contentWidth);
+    const relY = Math.min(Math.max(e.clientY - rect.top - offsetY, 0), contentHeight);
     setLens({
       x: e.clientX,
       y: e.clientY,
       bgX: -(relX * zoom - lensSize / 2),
       bgY: -(relY * zoom - lensSize / 2),
-      bgWidth: rect.width * zoom,
-      bgHeight: rect.height * zoom,
+      bgWidth: contentWidth * zoom,
+      bgHeight: contentHeight * zoom,
     });
   };
 
@@ -94,13 +122,14 @@ export const Magnifier: React.FC<MagnifierProps> = ({
         <div
           aria-hidden="true"
           data-testid="magnifier-lens"
-          className="pointer-events-none fixed z-[999] rounded-full border-2 border-brass-400/70 shadow-[0_10px_30px_rgba(0,0,0,0.55)]"
+          className="pointer-events-none fixed z-[999] rounded-full border border-ink"
           style={{
             left: lens.x - lensSize / 2,
             top: lens.y - lensSize / 2,
             width: lensSize,
             height: lensSize,
-            backgroundColor: '#0b0b0d',
+            boxShadow: '4px 4px 0 0 var(--color-hairline)',
+            backgroundColor: 'var(--color-paper-dim)',
             backgroundImage: `url(${src})`,
             backgroundRepeat: 'no-repeat',
             backgroundSize: `${lens.bgWidth}px ${lens.bgHeight}px`,

@@ -11,6 +11,11 @@ const STUB_RECT: DOMRect = {
 
 beforeEach(() => {
   vi.spyOn(HTMLImageElement.prototype, 'getBoundingClientRect').mockReturnValue(STUB_RECT);
+  // Default: natural image ratio (4:3) matches the stub rect's ratio
+  // (400x300 = 4:3), so object-contain renders edge-to-edge with no
+  // letterbox gutter -- existing pixel-math tests below assume this.
+  vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(800);
+  vi.spyOn(HTMLImageElement.prototype, 'naturalHeight', 'get').mockReturnValue(600);
 });
 
 afterEach(() => {
@@ -76,6 +81,36 @@ describe('Magnifier', () => {
     // relX clamps to rect.width (400), relY to rect.height (300):
     // bgX = -(400*2 - 80) = -720; bgY = -(300*2 - 80) = -520.
     expect(lens.style.backgroundPosition).toBe('-720px -520px');
+  });
+
+  it('accounts for object-contain letterboxing when the image ratio does not match the box ratio', () => {
+    // Rect is 400x300 (4:3, box ratio 1.333) but the natural image is
+    // 200x300 (2:3, ratio 0.667) -- narrower than the box, so
+    // object-contain fits it to the box's full height and letterboxes
+    // 100px of empty gutter on each side: content spans x=[200,400) of
+    // the box's own 400-wide rect (offsetX=100, contentWidth=200),
+    // full height (offsetY=0, contentHeight=300).
+    vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(200);
+    vi.spyOn(HTMLImageElement.prototype, 'naturalHeight', 'get').mockReturnValue(300);
+    render(<Magnifier src="/doc.jpg" alt="Document" zoom={2} lensSize={160} />);
+    const img = screen.getByAltText('Document');
+
+    // Pointer at (300, 200) -> 200,150 relative to the rect's top-left
+    // (100, 50). Subtracting the letterbox offset (100, 0):
+    // relX = 200 - 100 = 100 (within [0, 200]); relY = 150 (within [0, 300]).
+    // bgX = -(100*2 - 80) = -120; bgY = -(150*2 - 80) = -220.
+    // bgWidth = contentWidth(200)*2 = 400; bgHeight = contentHeight(300)*2 = 600.
+    fireEvent.pointerMove(img, { clientX: 300, clientY: 200 });
+    let lens = screen.getByTestId('magnifier-lens') as HTMLElement;
+    expect(lens.style.backgroundPosition).toBe('-120px -220px');
+    expect(lens.style.backgroundSize).toBe('400px 600px');
+
+    // Pointer inside the left letterbox gutter (box x=100..200, content
+    // starts at x=200) must clamp to the content's own left edge, not
+    // treat the gutter as if it were image content.
+    fireEvent.pointerMove(img, { clientX: 150, clientY: 200 });
+    lens = screen.getByTestId('magnifier-lens') as HTMLElement;
+    expect(lens.style.backgroundPosition).toBe('80px -220px'); // relX clamped to 0 -> bgX = -(0*2-80) = 80
   });
 
   it('never shows the lens under prefers-reduced-motion, even on pointer move', () => {

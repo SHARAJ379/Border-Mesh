@@ -23,20 +23,20 @@ export const SectionHeading: React.FC<SectionHeadingProps> = ({
 }) => {
   const titleClasses =
     level === 'h1'
-      ? 'font-display text-lg font-bold tracking-tight text-graphite-100'
-      : 'font-display text-sm font-bold tracking-tight text-graphite-200';
+      ? 'font-display text-[26px] text-ink'
+      : 'font-display text-[17px] text-ink';
 
   const Tag = level;
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div>
-        <Tag className={`${titleClasses} flex items-center gap-2`}>
+        <Tag className={`${titleClasses} flex items-center gap-2.5`}>
           {icon}
           {title}
         </Tag>
         {description && (
-          <p className="text-sm text-graphite-500 mt-0.5">{description}</p>
+          <p className="text-[12px] text-muted mt-1">{description}</p>
         )}
       </div>
       {action && <div className="shrink-0">{action}</div>}

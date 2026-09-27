@@ -25,12 +25,12 @@ interface MRZValidatorProps {
 const NON_MRZ_DOCUMENT_TYPES = new Set(['AADHAAR', 'PAN', 'DRIVING_LICENSE', 'VOTER_ID', 'VISA']);
 
 const EmptyState: React.FC<{ variant: 'expected' | 'missing' }> = ({ variant }) => (
-  <div className="glass-panel rounded-xl p-6 text-center">
-    <div className={`flex items-center justify-center gap-2 mb-2 text-sm font-semibold ${variant === 'expected' ? 'text-graphite-400' : 'text-amber-400'}`}>
-      {variant === 'expected' ? <Info className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+  <div className="border border-hairline p-6 text-center">
+    <div className={`flex items-center justify-center gap-2 mb-2 text-[13px] font-bold ${variant === 'expected' ? 'text-muted' : 'text-signal-medium'}`}>
+      {variant === 'expected' ? <Info className="w-4 h-4" strokeWidth={1.75} /> : <AlertTriangle className="w-4 h-4" strokeWidth={1.75} />}
       <span>MRZ extraction</span>
     </div>
-    <p className="text-xs text-graphite-500">
+    <p className="text-[11px] text-muted">
       {variant === 'expected'
         ? 'Not applicable for this document type — no ICAO 9303 Machine Readable Zone by design.'
         : 'No Machine Readable Zone (MRZ) detected or parsed.'}
@@ -51,78 +51,62 @@ export const MRZValidator: React.FC<MRZValidatorProps> = ({ mrz, validation, doc
   }
 
   return (
-    <ScrollReveal className="glass-panel rounded-xl p-5 space-y-5">
+    <ScrollReveal className="border border-hairline p-5 space-y-5">
       <SectionHeading
         level="h3"
         title="ICAO 9303 MRZ validation"
-        icon={<Binary className="w-4 h-4 text-graphite-500" />}
+        icon={<Binary className="w-4 h-4 text-muted" strokeWidth={1.75} />}
         action={
-          <span
-            className={`text-xs font-semibold px-3 py-1 rounded-full border ${
-              mrz.is_valid
-                ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40'
-                : 'bg-rose-950/60 text-rose-300 border-rose-500/40'
-            }`}
-          >
+          <span className={`badge-signal ${mrz.is_valid ? 'badge-low' : 'badge-critical'}`}>
             {mrz.is_valid ? 'All checksums valid' : 'Checksum mismatch'}
           </span>
         }
       />
 
-      {/* Raw MRZ Lines Display */}
-      <div className="p-4 rounded-lg bg-graphite-950/60 border border-graphite-800/80 space-y-2">
-        <span className="text-[10px] text-graphite-400 block mb-1">
+      {/* Raw MRZ lines */}
+      <div className="border-t border-b border-hairline py-3 space-y-2">
+        <span className="label-eyebrow block mb-1">
           Format: {mrz.format} (2 lines x 44 chars)
         </span>
-        <div className="font-mono text-xs sm:text-sm tracking-widest text-graphite-200 break-all select-all font-semibold p-2 bg-graphite-900/50 rounded border border-graphite-800/60">
+        <div className="figure text-[13px] sm:text-[14px] tracking-[0.15em] text-ink break-all select-all font-bold py-2 border-b border-hairline">
           {mrz.line1}
         </div>
-        <div className="font-mono text-xs sm:text-sm tracking-widest text-graphite-200 break-all select-all font-semibold p-2 bg-graphite-900/50 rounded border border-graphite-800/60">
+        <div className="figure text-[13px] sm:text-[14px] tracking-[0.15em] text-ink break-all select-all font-bold py-2">
           {mrz.line2}
         </div>
       </div>
 
-      {/* Checksums Matrix */}
+      {/* Checksums matrix */}
       <div>
-        <h4 className="text-xs font-medium text-graphite-400 mb-3">
+        <h4 className="label-eyebrow mb-3">
           ICAO 9303 7-3-1 checksum matrix
         </h4>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
           {mrz.checksums.map((cs, idx) => {
             const isValid = cs.valid;
             return (
               <div
                 key={idx}
-                className={`p-3 rounded-lg border flex items-center justify-between transition-colors ${
-                  isValid
-                    ? 'bg-graphite-950/60 border-graphite-800/80 text-graphite-200 hover:border-emerald-500/30'
-                    : 'bg-rose-950/40 border-rose-500/40 text-rose-200 hover:border-rose-500/50'
-                }`}
+                className="rule-row"
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
                   {isValid ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <CheckCircle2 className="w-4 h-4 text-signal-low shrink-0" strokeWidth={1.75} />
                   ) : (
-                    <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <XCircle className="w-4 h-4 text-signal-critical shrink-0" strokeWidth={1.75} />
                   )}
-                  <div>
-                    <span className="text-xs font-medium block">
+                  <div className="min-w-0">
+                    <span className="text-[12px] font-bold text-ink block">
                       {cs.field}
                     </span>
-                    <span className="text-[10px] font-mono text-graphite-400">
+                    <span className="text-[10px] figure text-muted">
                       Found: '{cs.check_digit}' | Calc: '{cs.calculated_check_digit}'
                     </span>
                   </div>
                 </div>
 
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                    isValid
-                      ? 'bg-emerald-950/80 text-emerald-300'
-                      : 'bg-rose-950/80 text-rose-300'
-                  }`}
-                >
+                <span className={`badge-signal shrink-0 ${isValid ? 'badge-low' : 'badge-critical'}`}>
                   {isValid ? 'MATCH' : 'FAIL'}
                 </span>
               </div>
@@ -131,32 +115,28 @@ export const MRZValidator: React.FC<MRZValidatorProps> = ({ mrz, validation, doc
         </div>
       </div>
 
-      {/* Document Rules Engine Summary if available */}
+      {/* Document rules engine summary, if available */}
       {validation && (
-        <div className="pt-3 border-t border-graphite-800/60 animate-fade-in">
-          <div className="flex items-center justify-between text-xs text-graphite-400 mb-3">
+        <div className="pt-3 border-t border-hairline animate-fade-in">
+          <div className="flex items-center justify-between text-[11px] text-muted mb-3">
             <span>Rules Engine Consistency:</span>
-            <span>
-              <strong className="text-emerald-400">{validation.passed_count} Passed</strong> /{' '}
-              <strong className={validation.failed_count > 0 ? 'text-rose-400' : 'text-graphite-400'}>
+            <span className="figure">
+              <strong className="text-signal-low">{validation.passed_count} Passed</strong> /{' '}
+              <strong className={validation.failed_count > 0 ? 'text-signal-critical' : 'text-muted'}>
                 {validation.failed_count} Failed
               </strong>
             </span>
           </div>
 
-          <div className="space-y-2">
+          <div>
             {validation.checks.map((check, idx) => (
               <div
                 key={idx}
-                className={`text-[11px] p-2.5 rounded-lg flex items-center justify-between transition-colors ${
-                  check.status === 'FAIL'
-                    ? 'bg-rose-950/40 border border-rose-900/60 text-rose-300 hover:bg-rose-950/50'
-                    : 'bg-graphite-950/50 text-graphite-400 hover:bg-graphite-950/80'
-                }`}
+                className="text-[11px] py-2 border-t border-hairline flex items-center justify-between gap-3"
               >
-                <span>{check.explanation}</span>
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                  check.status === 'FAIL' ? 'text-rose-400' : check.status === 'NOT_APPLICABLE' ? 'text-graphite-500' : 'text-emerald-400'
+                <span className={check.status === 'FAIL' ? 'text-signal-critical' : 'text-ink-soft'}>{check.explanation}</span>
+                <span className={`badge-signal shrink-0 ${
+                  check.status === 'FAIL' ? 'badge-critical' : check.status === 'NOT_APPLICABLE' ? 'badge-neutral' : 'badge-low'
                 }`}>
                   {check.status === 'NOT_APPLICABLE' ? 'N/A' : check.status}
                 </span>

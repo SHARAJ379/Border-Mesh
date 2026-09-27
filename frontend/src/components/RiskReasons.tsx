@@ -26,10 +26,10 @@ const FACTOR_ORDER: (RiskFactorKey | 'OTHER')[] = [
 ];
 
 const STATUS_META: Record<RiskCheckStatus, { icon: React.FC<any>; color: string; label: string }> = {
-  PASS: { icon: CheckCircle2, color: 'text-emerald-400', label: 'PASS' },
-  FAIL: { icon: XCircle, color: 'text-rose-400', label: 'FAIL' },
-  INFO: { icon: Info, color: 'text-sky-400', label: 'INFO' },
-  NOT_APPLICABLE: { icon: MinusCircle, color: 'text-graphite-500', label: 'N/A' },
+  PASS: { icon: CheckCircle2, color: 'text-signal-low', label: 'PASS' },
+  FAIL: { icon: XCircle, color: 'text-signal-critical', label: 'FAIL' },
+  INFO: { icon: Info, color: 'text-accent', label: 'INFO' },
+  NOT_APPLICABLE: { icon: MinusCircle, color: 'text-muted', label: 'N/A' },
 };
 
 function formatEvidenceValue(v: unknown): string {
@@ -43,20 +43,20 @@ const EvidenceLine: React.FC<{ check: RiskCheck }> = ({ check }) => {
   if (!ev) return null;
 
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10.5px] font-mono text-graphite-400 mt-1">
+    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10.5px] text-muted mt-1">
       {ev.match && ev.match.length > 0 ? (
         ev.match.map((m, i) => (
-          <span key={i} className="px-1.5 py-0.5 rounded bg-graphite-900/70 border border-graphite-800">
-            '{m.matched_token}' ↔ '{m.query_token}' via {m.method}
+          <span key={i} className="px-1.5 py-0.5 border border-hairline">
+            '{m.matched_token}' &harr; '{m.query_token}' via {m.method}
             {m.edit_distance !== null && m.edit_distance !== undefined ? ` (distance ${m.edit_distance})` : ''}
           </span>
         ))
       ) : (
         (ev.measured_value !== null && ev.measured_value !== undefined) && (
           <span>
-            Measured: <strong className="text-graphite-300">{formatEvidenceValue(ev.measured_value)}</strong>
+            Measured: <strong className="text-ink-soft">{formatEvidenceValue(ev.measured_value)}</strong>
             {ev.threshold_value !== null && ev.threshold_value !== undefined && (
-              <> vs threshold <strong className="text-graphite-300">{formatEvidenceValue(ev.threshold_value)}</strong></>
+              <> vs threshold <strong className="text-ink-soft">{formatEvidenceValue(ev.threshold_value)}</strong></>
             )}
             {ev.unit ? ` [${ev.unit}]` : ''}
           </span>
@@ -75,24 +75,24 @@ const CheckRow: React.FC<{ check: RiskCheck }> = ({ check }) => {
   const meta = STATUS_META[check.status] || STATUS_META.INFO;
   const Icon = meta.icon;
   return (
-    <div className="p-3 rounded-lg bg-graphite-950/70 border border-graphite-800/80 hover:border-graphite-700/60 transition-all text-xs">
+    <div className="py-3 border-b border-hairline text-[12px]">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex items-start gap-2 min-w-0">
-          <Icon className={`w-4 h-4 shrink-0 mt-0.5 ${meta.color}`} />
+          <Icon className={`w-4 h-4 shrink-0 mt-0.5 ${meta.color}`} strokeWidth={1.75} />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-semibold text-graphite-200">{check.label}</span>
+              <span className="font-bold text-ink">{check.label}</span>
               {check.severity && <RiskBadge level={check.severity} size="sm" />}
             </div>
-            <p className="text-graphite-400 text-[11px] leading-relaxed mt-0.5">{check.explanation}</p>
+            <p className="text-ink-soft text-[11px] leading-relaxed mt-0.5">{check.explanation}</p>
             <EvidenceLine check={check} />
           </div>
         </div>
         <div className="flex flex-col items-end shrink-0 text-right">
           {check.status === 'FAIL' && check.score_impact > 0 && (
-            <span className="text-rose-400 font-bold">+{check.score_impact.toFixed(1)} pts</span>
+            <span className="text-signal-critical figure font-bold">+{check.score_impact.toFixed(1)} pts</span>
           )}
-          <span className="text-[10px] text-graphite-500">Conf: {Math.round(check.confidence * 100)}%</span>
+          <span className="text-[10px] text-muted figure">Conf: {Math.round(check.confidence * 100)}%</span>
         </div>
       </div>
     </div>
@@ -100,9 +100,9 @@ const CheckRow: React.FC<{ check: RiskCheck }> = ({ check }) => {
 };
 
 const EmptyState: React.FC = () => (
-  <div className="glass-panel rounded-xl p-6 text-center">
-    <ListChecks className="w-8 h-8 text-graphite-600 mx-auto mb-2" />
-    <p className="text-xs text-graphite-500">No risk checks recorded for this case yet.</p>
+  <div className="border border-hairline p-6 text-center">
+    <ListChecks className="w-7 h-7 text-muted mx-auto mb-2" strokeWidth={1.5} />
+    <p className="text-[11px] text-muted">No risk checks recorded for this case yet.</p>
   </div>
 );
 
@@ -135,7 +135,7 @@ export const RiskReasons: React.FC<RiskReasonsProps> = ({ checks, compact = fals
 
   if (checks.length === 0) {
     return compact
-      ? <p className="text-xs text-graphite-500 p-3">No risk checks recorded for this case.</p>
+      ? <p className="text-[11px] text-muted p-3">No risk checks recorded for this case.</p>
       : <EmptyState />;
   }
 
@@ -160,16 +160,16 @@ export const RiskReasons: React.FC<RiskReasonsProps> = ({ checks, compact = fals
           <div key={group.key}>
             <button
               onClick={() => toggleGroup(group.key)}
-              className="w-full flex items-center justify-between gap-2 py-1.5 text-left cursor-pointer group"
+              className="w-full flex items-center justify-between gap-2 py-2 text-left cursor-pointer border-t border-hairline"
             >
-              <span className="text-[11px] font-semibold text-graphite-300 uppercase tracking-wide flex items-center gap-2">
+              <span className="text-[11px] font-bold text-ink uppercase tracking-[0.05em] flex items-center gap-2">
                 {group.label}
-                <span className="text-graphite-500 font-normal normal-case">
+                <span className="text-muted font-normal normal-case tracking-normal">
                   ({group.items.length} check{group.items.length === 1 ? '' : 's'}
                   {groupFailCount > 0 ? `, ${groupFailCount} flagged` : ', all clean'})
                 </span>
               </span>
-              <ChevronDown className={`w-3.5 h-3.5 text-graphite-500 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+              <ChevronDown className={`w-3.5 h-3.5 text-muted transition-transform ${isCollapsed ? '-rotate-90' : ''}`} strokeWidth={1.75} />
             </button>
             {!isCollapsed && (
               <div className="space-y-2 mt-1.5">
@@ -187,23 +187,20 @@ export const RiskReasons: React.FC<RiskReasonsProps> = ({ checks, compact = fals
   }
 
   return (
-    <ScrollReveal className="glass-panel rounded-xl p-5 space-y-5">
+    <ScrollReveal className="border border-hairline p-5 space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <SectionHeading
           level="h3"
           title={`Risk reasons — itemized checks (${checks.length})`}
-          icon={<ListChecks className="w-4 h-4 text-graphite-500" />}
+          icon={<ListChecks className="w-4 h-4 text-muted" strokeWidth={1.75} />}
         />
-        <div className="flex items-center gap-1 bg-graphite-950/60 p-1 rounded-lg border border-graphite-800/80 text-[11px]">
+        <div className="flex items-center gap-4 text-[11px]">
           {(['ALL', 'FAIL', 'PASS', 'INFO', 'NOT_APPLICABLE'] as const).map((s) => (
             <button
               key={s}
+              aria-pressed={statusFilter === s}
               onClick={() => setStatusFilter(s)}
-              className={`px-2.5 py-1 rounded-lg transition-all duration-200 cursor-pointer ${
-                statusFilter === s
-                  ? 'bg-brass-950/80 text-brass-300 border border-brass-500/40 font-semibold shadow-sm'
-                  : 'text-graphite-400 hover:text-graphite-200 hover:bg-graphite-900/60'
-              }`}
+              className="tab-flat tab-flat-accent"
             >
               {s === 'NOT_APPLICABLE' ? 'N/A' : s}
             </button>
@@ -211,7 +208,7 @@ export const RiskReasons: React.FC<RiskReasonsProps> = ({ checks, compact = fals
         </div>
       </div>
 
-      <p className="text-[11px] text-graphite-500 -mt-2">
+      <p className="text-[11px] text-muted -mt-2">
         {failCount === 0
           ? `All ${checks.length} checks passed — this is why the case is clean, not an absence of evidence.`
           : `${failCount} of ${checks.length} checks flagged.`}

@@ -10,31 +10,30 @@ interface RiskBadgeProps {
 export const RiskBadge: React.FC<RiskBadgeProps> = ({ level, status, size = 'md' }) => {
   const text = level || status || 'UNKNOWN';
 
-  let colorClasses = 'bg-graphite-800/80 text-graphite-300 border-graphite-700';
+  let signalClass = 'badge-neutral';
 
   if (text === 'LOW' || text === 'CLEARED' || text === 'LOW_RISK' || text === 'MATCH') {
-    colorClasses = 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40';
+    signalClass = 'badge-low';
   } else if (text === 'MEDIUM' || text === 'MEDIUM_RISK' || text === 'ROUTINE VERIFICATION') {
-    colorClasses = 'bg-amber-950/60 text-amber-300 border-amber-500/40';
+    signalClass = 'badge-medium';
   } else if (text === 'HIGH' || text === 'HIGH_RISK' || text === 'REQUIRES_REVIEW' || text === 'REQUIRES_INSPECTION' || text === 'REVIEW_REQUIRED') {
-    colorClasses = 'bg-orange-950/60 text-orange-300 border-orange-500/40';
+    signalClass = 'badge-high';
   } else if (text === 'CRITICAL' || text === 'ESCALATED' || text === 'REJECT') {
-    colorClasses = 'bg-rose-950/60 text-rose-300 border-rose-500/50';
+    signalClass = 'badge-critical';
   } else if (text === 'PROCESSING') {
-    colorClasses = 'bg-brass-950/60 text-brass-300 border-brass-500/40 animate-pulse';
+    signalClass = 'badge-pending';
   }
 
   const sizeClasses = {
-    sm: 'text-xs px-2 py-0.5',
-    md: 'text-xs px-2.5 py-1',
-    lg: 'text-sm px-3.5 py-1.5'
+    sm: 'text-[10px]',
+    md: 'text-[11px]',
+    lg: 'text-[12px]'
   }[size];
 
   const formatted = text.replace(/_/g, ' ');
 
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full font-semibold tracking-wider uppercase border ${colorClasses} ${sizeClasses}`}>
-      <span className="h-1.5 w-1.5 rounded-full bg-current"></span>
+    <span className={`badge-signal ${signalClass} ${sizeClasses}`}>
       {formatted}
     </span>
   );

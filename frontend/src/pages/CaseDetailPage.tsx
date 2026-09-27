@@ -67,11 +67,11 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({ caseId, onBack }
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-4">
-          <div className="relative w-10 h-10">
-            <div className="absolute inset-0 border-2 border-graphite-800 rounded-full" />
-            <div className="absolute inset-0 border-2 border-brass-400 border-t-transparent border-r-transparent rounded-full animate-spin" />
+          <div className="relative w-8 h-8">
+            <div className="absolute inset-0 border border-hairline" />
+            <div className="absolute inset-0 border border-accent border-t-transparent border-r-transparent animate-spin" />
           </div>
-          <span className="text-xs text-graphite-400 font-medium tracking-wide">Loading case file {caseId}…</span>
+          <span className="text-[11px] uppercase tracking-[0.06em] text-muted">Loading case file {caseId}&hellip;</span>
         </div>
       </div>
     );
@@ -140,29 +140,29 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({ caseId, onBack }
       <div className="flex items-center justify-between">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-xs text-graphite-400 hover:text-brass-400 transition-colors cursor-pointer px-2 py-1.5 rounded-lg hover:bg-graphite-900/50"
+          className="flex items-center gap-2 text-[11px] uppercase tracking-[0.05em] text-ink-soft hover:text-accent transition-colors cursor-pointer"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-3.5 h-3.5" strokeWidth={1.75} />
           <span>Back to Screening Operations</span>
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <button
             onClick={handleDownloadPdf}
             disabled={exportingPdf}
-            className="glass-panel px-3 py-1.5 rounded-lg text-graphite-400 hover:text-graphite-200 text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brass-500/50"
+            className="btn-secondary px-3 py-1.5 text-[11px] flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             title="Download a PDF summary of this case"
           >
-            {exportingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            {exportingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" strokeWidth={1.75} />}
             <span>{exportingPdf ? 'Preparing PDF…' : 'Download PDF'}</span>
           </button>
 
           <button
             onClick={fetchCase}
-            className="glass-panel px-3 py-1.5 rounded-lg text-graphite-400 hover:text-graphite-200 text-xs flex items-center gap-1.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brass-500/50"
+            className="btn-secondary px-3 py-1.5 text-[11px] flex items-center gap-1.5 cursor-pointer"
             title="Refresh case data"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
+            <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} />
             <span>Refresh</span>
           </button>
         </div>

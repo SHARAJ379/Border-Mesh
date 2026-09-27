@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState } from 'react';
+import React, { useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
 import { PrivacyNotice } from './components/PrivacyNotice';
@@ -15,12 +15,10 @@ import { CaseDetailPage } from './pages/CaseDetailPage';
 import { ChangeDetectionPage } from './pages/ChangeDetectionPage';
 import { ComplianceDashboardPage } from './pages/ComplianceDashboardPage';
 
-// Three.js/R3F/drei are the single heaviest dependency in this app --
-// lazy-loaded so the WebGL background never blocks first paint or adds to
-// the critical-path bundle on slow/mobile connections.
-const SceneBackground = lazy(() =>
-  import('./three/SceneBackground').then((m) => ({ default: m.SceneBackground }))
-);
+// The ambient WebGL dot-mesh background (see git history's SceneBackground)
+// was a dark-theme device -- ink-on-paper has no equivalent "glowing mesh
+// behind glass panels" moment, so this redesign drops it rather than
+// re-hueing a shader built for a dark ground.
 
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
@@ -44,11 +42,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="relative flex h-screen bg-graphite-950 text-graphite-100 overflow-hidden font-sans">
-      <Suspense fallback={null}>
-        <SceneBackground />
-      </Suspense>
-
+    <div className="relative flex h-screen bg-paper text-ink overflow-hidden font-sans">
       {/* Sidebar */}
       <Sidebar
         currentTab={currentTab}

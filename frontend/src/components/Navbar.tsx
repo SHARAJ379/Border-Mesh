@@ -36,25 +36,25 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onScenarioLoaded }) 
   };
 
   return (
-    <header className="glass-panel-strong border-x-0 border-t-0 sticky top-0 z-40">
+    <header className="bg-paper/90 backdrop-blur-md border-b border-hairline sticky top-0 z-40">
       {/* 1-Click Judging Demo Scenario Bar */}
       <QuickDemoBar onScenarioLoaded={onScenarioLoaded} />
 
-      {/* Main App Bar — one quiet line, no boxed chips */}
-      <div className="px-6 py-3 flex items-center justify-between gap-4">
+      {/* Main app bar -- one quiet line, no boxed chips */}
+      <div className="px-6 h-[58px] flex items-center justify-between gap-4">
         <div className="flex items-baseline gap-2.5 min-w-0">
-          <h2 className="font-display text-[15px] font-bold tracking-tight text-graphite-100 truncate">
+          <h2 className="font-display text-[17px] text-ink truncate">
             {titles[currentTab] || 'BorderMesh Screening'}
           </h2>
-          <span className="hidden sm:inline text-xs text-graphite-500 shrink-0 pl-2.5 border-l border-graphite-800/60">
+          <span className="hidden sm:inline text-[11px] uppercase tracking-[0.06em] text-muted shrink-0 pl-2.5 border-l border-hairline">
             Station #04, Immigration Gateway
           </span>
         </div>
 
-        <div className="flex items-center gap-3 text-xs text-graphite-400 shrink-0">
-          <span className="hidden md:inline font-mono tabular-nums">{timeStr}</span>
-          <div className="flex items-center gap-1.5 md:pl-3 md:border-l md:border-graphite-800/60">
-            <User className="w-3.5 h-3.5 text-graphite-500" />
+        <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.06em] text-ink-soft shrink-0">
+          <span className="hidden md:inline figure">{timeStr}</span>
+          <div className="flex items-center gap-1.5 md:pl-3 md:border-l md:border-hairline">
+            <User className="w-3.5 h-3.5 text-muted" strokeWidth={1.75} />
             <span>Officer-Demo-01</span>
           </div>
         </div>

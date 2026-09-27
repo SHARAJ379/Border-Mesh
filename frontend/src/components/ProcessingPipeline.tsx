@@ -33,12 +33,12 @@ export const ProcessingPipeline: React.FC<ProcessingPipelineProps> = ({
           const isLast = index === stages.length - 1;
           const nodeColor =
             st.status === 'completed'
-              ? 'bg-emerald-500 border-emerald-500 text-white'
+              ? 'bg-signal-low border-signal-low text-paper'
               : st.status === 'running'
-              ? 'bg-brass-500 border-brass-500 text-graphite-950'
+              ? 'bg-accent border-accent text-paper'
               : st.status === 'error'
-              ? 'bg-rose-600 border-rose-600 text-white'
-              : 'bg-graphite-900 border-graphite-700 text-graphite-500';
+              ? 'bg-signal-critical border-signal-critical text-paper'
+              : 'bg-paper border-hairline text-muted';
 
           return (
             <div key={st.id} className="flex sm:flex-1 sm:flex-col items-start sm:items-center gap-3 sm:gap-2">
@@ -49,19 +49,19 @@ export const ProcessingPipeline: React.FC<ProcessingPipelineProps> = ({
                     className={`w-7 h-7 rounded-full border flex items-center justify-center shrink-0 transition-colors ${nodeColor}`}
                   >
                     {st.status === 'completed' ? (
-                      <Check className="w-3.5 h-3.5" />
+                      <Check className="w-3.5 h-3.5" strokeWidth={1.75} />
                     ) : st.status === 'running' ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />
                     ) : st.status === 'error' ? (
-                      <AlertCircle className="w-3.5 h-3.5" />
+                      <AlertCircle className="w-3.5 h-3.5" strokeWidth={1.75} />
                     ) : (
-                      <span className="text-[11px] font-medium">{index + 1}</span>
+                      <span className="figure text-[11px]">{index + 1}</span>
                     )}
                   </div>
                   {!isLast && (
                     <div
                       className={`hidden sm:block h-px flex-1 ${
-                        st.status === 'completed' ? 'bg-emerald-500/50' : 'bg-graphite-800'
+                        st.status === 'completed' ? 'bg-signal-low' : 'bg-hairline'
                       }`}
                     />
                   )}
@@ -72,18 +72,18 @@ export const ProcessingPipeline: React.FC<ProcessingPipelineProps> = ({
               <div className="flex-1 sm:text-center min-w-0 pb-4 sm:pb-0">
                 <div className="flex items-center sm:justify-center gap-1.5">
                   <span
-                    className={`text-xs font-medium ${
-                      st.status === 'pending' ? 'text-graphite-500' : 'text-graphite-200'
+                    className={`text-[11px] font-bold ${
+                      st.status === 'pending' ? 'text-muted' : 'text-ink'
                     }`}
                   >
                     {st.name}
                   </span>
                   {st.latencyMs !== undefined && (
-                    <span className="text-[11px] text-graphite-500">{Math.round(st.latencyMs)}ms</span>
+                    <span className="text-[11px] text-muted figure">{Math.round(st.latencyMs)}ms</span>
                   )}
                 </div>
                 {st.detail && (
-                  <p className="text-xs text-graphite-500 mt-0.5 sm:max-w-[10rem] sm:mx-auto" title={st.detail}>
+                  <p className="text-[11px] text-muted mt-0.5 sm:max-w-[10rem] sm:mx-auto" title={st.detail}>
                     {st.detail}
                   </p>
                 )}
@@ -91,7 +91,7 @@ export const ProcessingPipeline: React.FC<ProcessingPipelineProps> = ({
 
               {/* Vertical connector for the mobile/stacked layout */}
               {!isLast && (
-                <div className="sm:hidden w-px self-stretch bg-graphite-800 ml-3.5" />
+                <div className="sm:hidden w-px self-stretch bg-hairline ml-3.5" />
               )}
             </div>
           );

@@ -74,11 +74,11 @@ export const SettingsPage: React.FC = () => {
     return (
       <div className="flex items-center justify-center min-h-[40vh]">
         <div className="flex flex-col items-center gap-3">
-          <div className="relative w-10 h-10">
-            <div className="absolute inset-0 border-2 border-graphite-800 rounded-full" />
-            <div className="absolute inset-0 border-2 border-brass-400 border-t-transparent border-r-transparent rounded-full animate-spin" />
+          <div className="relative w-8 h-8">
+            <div className="absolute inset-0 border border-hairline" />
+            <div className="absolute inset-0 border border-accent border-t-transparent border-r-transparent animate-spin" />
           </div>
-          <span className="text-xs text-graphite-400 font-medium tracking-wide">Loading live policy configuration…</span>
+          <span className="text-[11px] uppercase tracking-[0.06em] text-muted">Loading live policy configuration&hellip;</span>
         </div>
       </div>
     );
@@ -97,43 +97,36 @@ export const SettingsPage: React.FC = () => {
     { key: 'tamper', label: 'Forensic tamper AI (ELA)', max: 60 },
     { key: 'face', label: 'Biometric face verification', max: 60 },
     { key: 'consistency', label: 'Data consistency crosscheck', max: 40 },
-    { key: 'watchlist', label: 'Simulated watchlist adapter (demo sandboxed)', max: 20 },
   ] as const;
 
   return (
-    <div className="space-y-7 max-w-4xl mx-auto">
+    <div className="space-y-8 max-w-4xl mx-auto">
       <SectionHeading
         title="Settings"
         description="Adjust risk engine weights, decision thresholds, and view connected subsystems."
-        icon={<Settings className="w-5 h-5 text-brass-400" />}
+        icon={<Settings className="w-5 h-5 text-accent" strokeWidth={1.75} />}
       />
 
-      <form onSubmit={handleSave} className="space-y-6">
-        {/* Risk Engine Weights -- the one real interactive control, keeps a card */}
-        <ScrollReveal className="glass-panel rounded-xl p-5 space-y-5">
+      <form onSubmit={handleSave} className="space-y-8">
+        {/* Risk engine weights -- the one real interactive control */}
+        <ScrollReveal className="border border-hairline p-5 space-y-5">
           <SectionHeading
             level="h3"
             title="Risk engine factor weights"
-            icon={<Sliders className="w-4 h-4 text-brass-400" />}
+            icon={<Sliders className="w-4 h-4 text-accent" strokeWidth={1.75} />}
             action={
-              <span
-                className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${
-                  totalWeight === 100
-                    ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/30'
-                    : 'bg-rose-950/60 text-rose-300 border border-rose-500/30'
-                }`}
-              >
+              <span className={`badge-signal ${totalWeight === 100 ? 'badge-low' : 'badge-critical'}`}>
                 {totalWeight === 100 ? 'Valid — 100%' : `Must total 100% — currently ${totalWeight}%`}
               </span>
             }
           />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
             {weightFields.map((field) => (
-              <div key={field.key}>
-                <label className="text-graphite-300 block mb-1.5 flex items-center justify-between">
+              <div key={field.key} className="rule-row flex-col items-stretch gap-1">
+                <label className="text-ink-soft flex items-center justify-between text-[12px]">
                   <span>{field.label}</span>
-                  <span className="text-brass-400 font-bold">
+                  <span className="figure text-accent font-bold">
                     {weights[field.key as keyof typeof weights]}%
                   </span>
                 </label>
@@ -143,14 +136,14 @@ export const SettingsPage: React.FC = () => {
                   max={field.max}
                   value={weights[field.key as keyof typeof weights]}
                   onChange={(e) => setWeights({ ...weights, [field.key]: parseInt(e.target.value) })}
-                  className="w-full accent-brass-500 bg-graphite-950/80 rounded-lg cursor-pointer h-2"
+                  className="field-range"
                 />
               </div>
             ))}
-            <div className="sm:col-span-2">
-              <label className="text-graphite-300 block mb-1.5 flex items-center justify-between">
+            <div className="sm:col-span-2 rule-row flex-col items-stretch gap-1">
+              <label className="text-ink-soft flex items-center justify-between text-[12px]">
                 <span>Simulated watchlist adapter (demo sandboxed)</span>
-                <span className="text-brass-400 font-bold">{weights.watchlist}%</span>
+                <span className="figure text-accent font-bold">{weights.watchlist}%</span>
               </label>
               <input
                 type="range"
@@ -158,42 +151,42 @@ export const SettingsPage: React.FC = () => {
                 max={20}
                 value={weights.watchlist}
                 onChange={(e) => setWeights({ ...weights, watchlist: parseInt(e.target.value) })}
-                className="w-full accent-brass-500 bg-graphite-950/80 rounded-lg cursor-pointer h-2"
+                className="field-range"
               />
             </div>
           </div>
         </ScrollReveal>
 
-        {/* Risk tier cutoffs -- read-only reference data, a plain row not a card */}
+        {/* Risk tier cutoffs -- read-only reference data */}
         <ScrollReveal>
-          <h3 className="text-sm font-semibold text-graphite-200 mb-3">Risk tier classification cutoffs</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-            <div className="glass-panel p-3 rounded-lg">
-              <span className="text-emerald-400 font-semibold block mb-1">Low risk</span>
-              <span className="text-graphite-500 block mb-1">0–{thresholds.low}</span>
-              <span className="text-graphite-500">Clear for entry</span>
+          <h3 className="font-display text-[17px] text-ink mb-3">Risk tier classification cutoffs</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 border-t border-b border-hairline divide-x divide-hairline text-[12px]">
+            <div className="p-3">
+              <span className="badge-signal badge-low block mb-1.5">Low risk</span>
+              <span className="figure text-ink block mb-1">0–{thresholds.low}</span>
+              <span className="text-muted">Clear for entry</span>
             </div>
-            <div className="glass-panel p-3 rounded-lg">
-              <span className="text-amber-400 font-semibold block mb-1">Medium risk</span>
-              <span className="text-graphite-500 block mb-1">{thresholds.low + 1}–{thresholds.medium}</span>
-              <span className="text-graphite-500">Routine confirmation</span>
+            <div className="p-3">
+              <span className="badge-signal badge-medium block mb-1.5">Medium risk</span>
+              <span className="figure text-ink block mb-1">{thresholds.low + 1}–{thresholds.medium}</span>
+              <span className="text-muted">Routine confirmation</span>
             </div>
-            <div className="glass-panel p-3 rounded-lg">
-              <span className="text-rose-400 font-semibold block mb-1">High & critical</span>
-              <span className="text-graphite-500 block mb-1">{thresholds.medium + 1}–100</span>
-              <span className="text-graphite-500">Secondary inspection / detain</span>
+            <div className="p-3">
+              <span className="badge-signal badge-critical block mb-1.5">High & critical</span>
+              <span className="figure text-ink block mb-1">{thresholds.medium + 1}–100</span>
+              <span className="text-muted">Secondary inspection / detain</span>
             </div>
           </div>
         </ScrollReveal>
 
-        {/* Connected subsystems -- plain label/value list, not a grid of boxes */}
+        {/* Connected subsystems */}
         <ScrollReveal>
-          <h3 className="text-sm font-semibold text-graphite-200 mb-3">Connected subsystem modules</h3>
-          <div className="glass-panel rounded-xl overflow-hidden">
+          <h3 className="font-display text-[17px] text-ink mb-3">Connected subsystem modules</h3>
+          <div>
             {subsystems.map((sub) => (
-              <div key={sub.name} className="flex items-center justify-between py-2.5 px-4 text-xs border-b border-graphite-800/40 last:border-0">
-                <span className="text-graphite-300">{sub.name}</span>
-                <span className={`font-semibold ${sub.accent ? 'text-brass-400' : 'text-emerald-400'}`}>
+              <div key={sub.name} className="rule-row text-[12px]">
+                <span className="text-ink-soft">{sub.name}</span>
+                <span className={`figure font-bold ${sub.accent ? 'text-accent' : 'text-signal-low'}`}>
                   {sub.value}
                 </span>
               </div>
@@ -201,34 +194,33 @@ export const SettingsPage: React.FC = () => {
           </div>
         </ScrollReveal>
 
-        {/* Save Button */}
-        <div className="flex items-center justify-end gap-3">
+        {/* Save button */}
+        <div className="flex items-center justify-end gap-4">
           {error && (
-            <span className="text-xs text-rose-400 flex items-center gap-1 animate-fade-in">
-              <AlertTriangle className="w-3.5 h-3.5" /> {error}
+            <span className="text-[11px] text-signal-critical flex items-center gap-1 animate-fade-in">
+              <AlertTriangle className="w-3.5 h-3.5" strokeWidth={1.75} /> {error}
             </span>
           )}
           {saved && !error && (
-            <span className="text-xs text-emerald-400 flex items-center gap-1 animate-fade-in">
-              <Check className="w-3.5 h-3.5" /> Policy weights updated — takes effect on the next screening
+            <span className="text-[11px] text-signal-low flex items-center gap-1 animate-fade-in">
+              <Check className="w-3.5 h-3.5" strokeWidth={1.75} /> Policy weights updated — takes effect on the next screening
             </span>
           )}
           <button
             type="submit"
             disabled={saving || totalWeight !== 100}
-            className="btn-brass px-6 py-2.5 rounded-lg text-xs font-semibold cursor-pointer disabled:cursor-not-allowed flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-brass-500/50"
+            className="btn-primary px-6 py-2.5 text-[11px] cursor-pointer disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />}
             Apply policy configuration
           </button>
         </div>
       </form>
 
-      {/* Legal & compliance -- plain link list, not a card grid, since
-          there's nothing interactive here beyond navigation. */}
+      {/* Legal & compliance -- plain link list */}
       <ScrollReveal>
-        <h3 className="text-sm font-semibold text-graphite-200 mb-3">Legal &amp; compliance</h3>
-        <div className="glass-panel rounded-xl overflow-hidden">
+        <h3 className="font-display text-[17px] text-ink mb-3">Legal &amp; compliance</h3>
+        <div>
           {[
             { href: '/privacy', label: 'Privacy Policy', description: 'What data this system processes and how it is protected.' },
             { href: '/terms', label: 'Terms & Conditions', description: 'Prototype status, known accuracy limitations, and acceptable use.' },
@@ -236,16 +228,16 @@ export const SettingsPage: React.FC = () => {
             <a
               key={link.href}
               href={link.href}
-              className="flex items-center justify-between gap-3 py-3 px-4 text-xs border-b border-graphite-800/40 last:border-0 hover:bg-graphite-900/50 transition-colors group"
+              className="flex items-center justify-between gap-3 py-3 border-t border-hairline last:border-b text-[12px] hover:bg-paper-dim transition-colors group"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <Scale className="w-4 h-4 text-graphite-500 shrink-0" />
+                <Scale className="w-4 h-4 text-muted shrink-0" strokeWidth={1.75} />
                 <div className="min-w-0">
-                  <span className="text-graphite-200 font-medium block">{link.label}</span>
-                  <span className="text-graphite-500 text-[11px] block truncate">{link.description}</span>
+                  <span className="text-ink font-bold block">{link.label}</span>
+                  <span className="text-muted text-[11px] block truncate">{link.description}</span>
                 </div>
               </div>
-              <ChevronRight className="w-3.5 h-3.5 text-graphite-600 group-hover:text-brass-400 transition-colors shrink-0" />
+              <ChevronRight className="w-3.5 h-3.5 text-muted group-hover:text-accent transition-colors shrink-0" strokeWidth={1.75} />
             </a>
           ))}
         </div>

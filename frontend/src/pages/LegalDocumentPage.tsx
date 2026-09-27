@@ -12,7 +12,7 @@ interface LegalDocumentPageProps {
  * Conditions) -- reached via a real, bookmarkable URL (/privacy, /terms;
  * see main.tsx's routing) rather than the tab-based app shell, since a
  * legal document is read once, referenced externally, and doesn't belong
- * inside the case-management workspace's Lenis/GSAP/Three.js chrome.
+ * inside the case-management workspace's Lenis/GSAP chrome.
  *
  * Content is authored directly as JSX in PrivacyPolicyPage.tsx/TermsPage.tsx
  * rather than rendered from docs/PRIVACY_POLICY.md / docs/TERMS_AND_
@@ -23,22 +23,20 @@ interface LegalDocumentPageProps {
  */
 export const LegalDocumentPage: React.FC<LegalDocumentPageProps> = ({ title, lastUpdated, children }) => {
   return (
-    <div className="min-h-screen bg-graphite-950 text-graphite-100 font-sans">
-      <header className="border-b border-graphite-800/60">
+    <div className="min-h-screen bg-paper text-ink font-sans">
+      <header className="border-b border-hairline">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between gap-4">
-          <a href="/" className="flex items-center gap-3 shrink-0">
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-brass-400 to-brass-700 flex items-center justify-center shadow-lg shadow-brass-950/40 border border-brass-400/30">
-              <Shield className="w-4 h-4 text-graphite-950" />
-            </div>
-            <span className="font-bold text-sm tracking-wider text-graphite-100">
-              BORDER<span className="text-brass-400">MESH</span>
+          <a href="/" className="flex items-center gap-2.5 shrink-0">
+            <Shield className="w-[18px] h-[18px] text-ink" strokeWidth={1.75} />
+            <span className="font-display text-[17px] text-ink">
+              BorderMesh<span className="text-accent">.</span>
             </span>
           </a>
           <a
             href="/"
-            className="flex items-center gap-1.5 text-xs text-graphite-400 hover:text-brass-400 transition-colors shrink-0"
+            className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.06em] text-ink-soft hover:text-accent transition-colors shrink-0"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
+            <ArrowLeft className="w-3.5 h-3.5" strokeWidth={1.75} />
             Back to app
           </a>
         </div>
@@ -46,19 +44,19 @@ export const LegalDocumentPage: React.FC<LegalDocumentPageProps> = ({ title, las
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
         <div className="mb-8">
-          <span className="text-[10px] uppercase tracking-widest text-graphite-500">
-            Smart India Hackathon 2026 · SIH26188 · Ministry of Home Affairs, Government of India
+          <span className="label-eyebrow">
+            Smart India Hackathon 2026 &middot; SIH26188 &middot; Ministry of Home Affairs, Government of India
           </span>
-          <h1 className="text-2xl sm:text-3xl font-bold text-graphite-100 mt-2">{title}</h1>
-          <p className="text-xs text-graphite-500 mt-2">Last updated: {lastUpdated}</p>
+          <h1 className="font-display text-[32px] sm:text-[40px] text-ink mt-2">{title}</h1>
+          <p className="text-[11px] text-muted mt-2">Last updated: {lastUpdated}</p>
         </div>
 
         <div className="legal-prose">{children}</div>
 
-        <nav className="mt-12 pt-6 border-t border-graphite-800/60 flex items-center gap-5 text-xs">
-          <a href="/privacy" className="text-graphite-400 hover:text-brass-400 transition-colors">Privacy Policy</a>
-          <a href="/terms" className="text-graphite-400 hover:text-brass-400 transition-colors">Terms &amp; Conditions</a>
-          <a href="/" className="text-graphite-400 hover:text-brass-400 transition-colors">Back to app</a>
+        <nav className="mt-12 pt-6 border-t border-hairline flex items-center gap-6 text-[11px] uppercase tracking-[0.06em]">
+          <a href="/privacy" className="text-ink-soft hover:text-accent transition-colors">Privacy Policy</a>
+          <a href="/terms" className="text-ink-soft hover:text-accent transition-colors">Terms &amp; Conditions</a>
+          <a href="/" className="text-ink-soft hover:text-accent transition-colors">Back to app</a>
         </nav>
       </main>
     </div>

@@ -17,24 +17,21 @@ import {
 const LoadingState: React.FC = () => (
   <div className="flex items-center justify-center min-h-[40vh]">
     <div className="flex flex-col items-center gap-3">
-      <div className="relative w-10 h-10">
-        <div className="absolute inset-0 border-2 border-graphite-800 rounded-full" />
-        <div className="absolute inset-0 border-2 border-brass-400 border-t-transparent border-r-transparent rounded-full animate-spin" />
+      <div className="relative w-8 h-8">
+        <div className="absolute inset-0 border border-hairline" />
+        <div className="absolute inset-0 border border-accent border-t-transparent border-r-transparent animate-spin" />
       </div>
-      <span className="text-xs text-graphite-400 font-medium tracking-wide">Loading analytics engine…</span>
+      <span className="text-[11px] uppercase tracking-[0.06em] text-muted">Loading analytics engine&hellip;</span>
     </div>
   </div>
 );
 
 const ErrorState: React.FC<{ message: string; onRetry: () => void }> = ({ message, onRetry }) => (
   <div className="p-8 flex flex-col items-center gap-3 text-center max-w-sm mx-auto animate-fade-in">
-    <AlertTriangle className="w-8 h-8 text-rose-400" />
-    <p className="text-sm text-graphite-200 font-medium">Couldn't load analytics</p>
-    <p className="text-xs text-graphite-500">{message}</p>
-    <button
-      onClick={onRetry}
-      className="btn-brass mt-2 px-5 py-2.5 rounded-lg text-xs font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-brass-500/50"
-    >
+    <AlertTriangle className="w-6 h-6 text-signal-high" strokeWidth={1.5} />
+    <p className="text-[13px] text-ink font-bold">Couldn't load analytics</p>
+    <p className="text-[11px] text-muted">{message}</p>
+    <button onClick={onRetry} className="btn-primary mt-2 px-5 py-2.5 text-[11px]">
       Retry
     </button>
   </div>
@@ -87,155 +84,86 @@ export const AnalyticsPage: React.FC = () => {
     {
       label: 'Average pipeline latency',
       value: `${(stats.avg_processing_time_ms / 1000).toFixed(2)}s`,
-      color: 'text-brass-300',
       icon: Zap,
-      iconColor: 'text-brass-400',
       note: 'Target: under 5.0s'
     },
     {
       label: 'Risk mitigation rate',
       value: `${stats.documents_screened > 0 ? Math.round((stats.cleared_cases / stats.documents_screened) * 100) : 0}%`,
-      color: 'text-emerald-400',
       icon: ShieldCheck,
-      iconColor: 'text-emerald-400',
       note: 'Admitted without secondary inspection'
     },
     {
       label: 'Anomaly detection yield',
       value: `${stats.documents_screened > 0 ? Math.round(((stats.high_risk_cases + stats.critical_cases) / stats.documents_screened) * 100) : 0}%`,
-      color: 'text-orange-400',
       icon: Activity,
-      iconColor: 'text-orange-400',
       note: 'Cases escalated for manual inspection'
     },
   ];
 
+  const chartAxisStyle = { stroke: '#767E8C', fontSize: 10 };
+  const tooltipStyle = {
+    contentStyle: { backgroundColor: '#EFE9DD', border: '1px solid #141C2B29', borderRadius: 0, fontSize: '11px', padding: '8px 12px', fontFamily: 'Courier Prime, monospace' },
+    itemStyle: { color: '#141C2B' },
+    cursor: { fill: '#141C2B0A' },
+  };
+
   return (
-    <div className="space-y-7">
+    <div className="space-y-10">
       <SectionHeading
         title="Analytics"
         description="Deep-dive telemetry into AI module triggers, latency profiles, and risk distributions."
-        icon={<BarChart3 className="w-5 h-5 text-brass-400" />}
+        icon={<BarChart3 className="w-5 h-5 text-accent" strokeWidth={1.75} />}
       />
 
       {/* KPI strip */}
-      <ScrollReveal className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {kpis.map((kpi) => {
-          const Icon = kpi.icon;
-          return (
-            <div key={kpi.label} className="glass-panel rounded-xl p-5">
-              <div className="flex items-start justify-between mb-3">
-                <span className="text-[11px] font-medium text-graphite-500 uppercase tracking-wider">{kpi.label}</span>
-                <div className="p-1.5 rounded-lg bg-graphite-950/60 border border-graphite-800/50">
-                  <Icon className={`w-4 h-4 ${kpi.iconColor}`} />
+      <ScrollReveal>
+        <div className="grid grid-cols-1 sm:grid-cols-3 border-t border-b border-hairline divide-x divide-hairline">
+          {kpis.map((kpi) => {
+            const Icon = kpi.icon;
+            return (
+              <div key={kpi.label} className="px-5 py-4">
+                <div className="flex items-start justify-between mb-2">
+                  <span className="label-eyebrow">{kpi.label}</span>
+                  <Icon className="w-4 h-4 text-muted" strokeWidth={1.75} />
                 </div>
-              </div>
-              <div className="space-y-1">
-                <div className={`text-3xl font-bold ${kpi.color} tracking-tight`}>
+                <div className="figure text-[26px] font-display text-ink leading-none">
                   {kpi.value}
                 </div>
-                <div className="text-[10px] text-graphite-500">{kpi.note}</div>
+                <div className="text-[10px] text-muted mt-1.5">{kpi.note}</div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </ScrollReveal>
 
-      {/* Latency by Module & Document Breakdown -- asymmetric: latency has
-          more rows, so it gets more room. */}
-      <ScrollReveal className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="glass-panel lg:col-span-7 rounded-xl p-5">
+      {/* Latency by module & document breakdown */}
+      <ScrollReveal className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+        <div className="lg:col-span-7">
           <SectionHeading level="h3" title="Component processing latency" description="Milliseconds per pipeline module" />
-          <div className="h-64 mt-3">
+          <div className="h-64 mt-4">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={latencyBreakdown} layout="vertical" margin={{ right: 36 }}>
-                <XAxis
-                  type="number"
-                  stroke="#6B655A"
-                  fontSize={11}
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: '#8C8579' }}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="module"
-                  stroke="#8C8579"
-                  fontSize={11}
-                  width={140}
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: '#B8B3A8' }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#17171A',
-                    borderColor: '#3D3933',
-                    borderRadius: '10px',
-                    fontSize: '12px',
-                    padding: '8px 12px',
-                    boxShadow: '0 4px 24px rgba(0,0,0,0.4)'
-                  }}
-                  itemStyle={{ color: '#EBE9E5' }}
-                  formatter={(value: any) => `${value}ms`}
-                />
-                <Bar
-                  dataKey="time"
-                  fill="#5C948C"
-                  radius={[0, 6, 6, 0]}
-                  maxBarSize={32}
-                >
-                  <LabelList
-                    dataKey="time"
-                    position="right"
-                    formatter={(value?: React.ReactNode) => `${value}ms`}
-                    fill="#C9C4B8"
-                    fontSize={11}
-                  />
+                <XAxis type="number" tickLine={false} axisLine={{ stroke: '#141C2B29' }} tick={{ fill: chartAxisStyle.stroke, fontSize: chartAxisStyle.fontSize }} />
+                <YAxis type="category" dataKey="module" width={140} tickLine={false} axisLine={false} tick={{ fill: '#4A5364', fontSize: chartAxisStyle.fontSize }} />
+                <Tooltip {...tooltipStyle} formatter={(value: any) => `${value}ms`} />
+                <Bar dataKey="time" fill="#2C4A8F" radius={[0, 0, 0, 0]} maxBarSize={10}>
+                  <LabelList dataKey="time" position="right" formatter={(value?: React.ReactNode) => `${value}ms`} fill="#4A5364" fontSize={10} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="glass-panel lg:col-span-5 rounded-xl p-5">
+        <div className="lg:col-span-5">
           <SectionHeading level="h3" title="Document types screened" />
-          <div className="h-64 mt-3">
+          <div className="h-64 mt-4">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={docTypeData} margin={{ left: 8, right: 24, top: 4, bottom: 4 }}>
-                <XAxis
-                  dataKey="type"
-                  stroke="#6B655A"
-                  fontSize={11}
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: '#8C8579' }}
-                />
-                <YAxis
-                  stroke="#8C8579"
-                  fontSize={11}
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: '#B8B3A8' }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#17171A',
-                    borderColor: '#3D3933',
-                    borderRadius: '10px',
-                    fontSize: '12px',
-                    padding: '8px 12px',
-                    boxShadow: '0 4px 24px rgba(0,0,0,0.4)'
-                  }}
-                  itemStyle={{ color: '#EBE9E5' }}
-                  formatter={(value: any) => `${value}`}
-                />
-                <Bar
-                  dataKey="count"
-                  fill="#5C948C"
-                  radius={[6, 6, 0, 0]}
-                  maxBarSize={40}
-                />
+                <XAxis dataKey="type" tickLine={false} axisLine={{ stroke: '#141C2B29' }} tick={{ fill: chartAxisStyle.stroke, fontSize: chartAxisStyle.fontSize }} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fill: '#4A5364', fontSize: chartAxisStyle.fontSize }} />
+                <Tooltip {...tooltipStyle} formatter={(value: any) => `${value}`} />
+                <Bar dataKey="count" fill="#2C4A8F" radius={[0, 0, 0, 0]} maxBarSize={28} />
               </BarChart>
             </ResponsiveContainer>
           </div>

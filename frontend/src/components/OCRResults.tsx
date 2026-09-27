@@ -32,7 +32,7 @@ export const OCRResults: React.FC<OCRResultsProps> = ({ data }) => {
 
   if (!data) {
     return (
-      <div className="glass-panel rounded-xl p-5 text-center text-xs text-graphite-500">
+      <div className="border border-hairline p-5 text-center text-[11px] text-muted">
         No OCR extraction data recorded.
       </div>
     );
@@ -63,63 +63,56 @@ export const OCRResults: React.FC<OCRResultsProps> = ({ data }) => {
   const confPercent = Math.round(data.confidence * 100);
 
   return (
-    <ScrollReveal className="glass-panel rounded-xl p-5 space-y-5">
+    <ScrollReveal className="border border-hairline p-5 space-y-5">
       <SectionHeading
         level="h3"
         title="OCR extraction"
-        icon={<FileText className="w-4 h-4 text-graphite-500" />}
+        icon={<FileText className="w-4 h-4 text-muted" strokeWidth={1.75} />}
         action={
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-4 flex-wrap text-[11px]">
             {data.fields.document_type && (
-              <span className="text-xs font-semibold text-graphite-300 px-2.5 py-1 rounded-lg bg-graphite-800/60 border border-graphite-700">
-                {data.fields.document_type}
-              </span>
+              <span className="label-eyebrow">{data.fields.document_type}</span>
             )}
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-graphite-500">Confidence:</span>
-              <span className="text-xs font-semibold text-graphite-200 px-2.5 py-1 rounded-lg bg-graphite-800/60 border border-graphite-700">
-                {confPercent}%
-              </span>
-            </div>
+            <span className="figure text-ink font-bold">Confidence: {confPercent}%</span>
           </div>
         }
       />
 
-      {/* Field Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      {/* Field grid -- hairline rows, not bordered tiles */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 border-t border-b border-hairline divide-x divide-hairline">
         {fields.map((f, i) => (
-          <div key={i} className="p-3 rounded-lg bg-graphite-950/70 border border-graphite-800/80 transition-colors hover:border-graphite-700/60">
-            <span className="text-[10px] text-graphite-400 uppercase tracking-wider block">
+          <div key={i} className="p-3">
+            <span className="label-eyebrow block">
               {f.label}
             </span>
-            <span className="text-xs font-mono font-medium text-graphite-200 truncate block mt-1">
+            <span className="figure text-[12px] text-ink truncate block mt-1">
               {f.value}
             </span>
           </div>
         ))}
       </div>
 
-      {/* Raw Text Accordion */}
-      <div className="pt-3 border-t border-graphite-800/60">
+      {/* Raw text accordion */}
+      <div>
         <button
           onClick={() => setShowRaw(!showRaw)}
-          className="flex items-center justify-between w-full text-xs text-graphite-400 hover:text-graphite-200 transition-colors py-2 cursor-pointer"
+          className="flex items-center justify-between w-full text-[11px] uppercase tracking-[0.06em] text-ink-soft hover:text-ink transition-colors py-1 cursor-pointer"
         >
           <span>Raw Extracted OCR Buffer ({data.detected_lines?.length ?? 0} lines)</span>
-          {showRaw ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          {showRaw ? <ChevronUp className="w-3.5 h-3.5" strokeWidth={1.75} /> : <ChevronDown className="w-3.5 h-3.5" strokeWidth={1.75} />}
         </button>
 
         {showRaw && (
           <div className="mt-3 relative animate-fade-in">
-            <pre className="p-4 rounded-lg bg-graphite-950 text-graphite-300 font-mono text-[11px] leading-relaxed overflow-x-auto max-h-56 border border-graphite-800/80 select-all">
+            <pre className="p-4 border border-hairline text-ink-soft text-[11px] leading-relaxed overflow-x-auto max-h-56 select-all">
               {data.raw_text}
             </pre>
             <button
               onClick={handleCopy}
-              className="absolute top-3 right-3 p-2 rounded-lg bg-graphite-800/80 hover:bg-graphite-700 text-graphite-300 text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+              className="absolute top-3 right-3 btn-secondary p-2 text-[11px] flex items-center gap-1.5 cursor-pointer"
               title="Copy raw text"
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              {copied ? <Check className="w-3.5 h-3.5" strokeWidth={1.75} /> : <Copy className="w-3.5 h-3.5" strokeWidth={1.75} />}
               <span className="hidden sm:inline">{copied ? 'Copied' : 'Copy'}</span>
             </button>
           </div>

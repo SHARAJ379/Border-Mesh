@@ -1,87 +1,229 @@
 @import "tailwindcss";
 
 @theme {
-  /* Warm charcoal base/surface/border/text scale -- replaces the default
-     cool blue-gray `slate` throughout the app. Anchored on the base
-     document-examiner-desk background (950) and panel surface (900). */
-  --color-graphite-50: #F6F5F3;
-  --color-graphite-100: #EBE9E5;
-  --color-graphite-200: #D6D3CC;
-  --color-graphite-300: #B8B3A8;
-  --color-graphite-400: #8C8579;
-  --color-graphite-500: #6B655A;
-  --color-graphite-600: #524D44;
-  --color-graphite-700: #3D3933;
-  --color-graphite-800: #2A2825;
-  --color-graphite-900: #1F1E1C;
-  --color-graphite-950: #17171A;
+  /* Warm-paper system replacing the earlier dark brass/graphite/glass
+     design (see git history on ui-redesign-v2 for that version, kept
+     recoverable there). Ground is a warm cream paper, ink is a deep
+     near-black navy, and one ink blue is the single accent -- reserved for
+     type, a rule, or a drawn line, NEVER a filled area (enforced by
+     convention in every component below, not by the type system). */
+  --color-paper: #EFE9DD;
+  --color-paper-dim: #E5DED0;
+  --color-ink: #141C2B;
+  --color-ink-soft: #4A5364;
+  --color-muted: #767E8C;
+  --color-accent: #2C4A8F;
+  --color-hairline: rgba(20, 28, 43, 0.16);
 
-  /* Brass/amber -- primary accent. Brightened and more saturated than the
-     original muted ink-stamp gold (see git history) for the Neo-Brutalist
-     pass: a punchy, high-contrast gold that reads as a bold accent fill
-     (buttons, badges) as well as bright text-on-dark, instead of a quiet
-     antique tone. Still evocative of ink stamps/security seals, just
-     louder. */
-  --color-brass-50: #FFF9E8;
-  --color-brass-100: #FFF0C2;
-  --color-brass-200: #FFE38A;
-  --color-brass-300: #FFD452;
-  --color-brass-400: #FFC93C;
-  --color-brass-500: #F5B300;
-  --color-brass-600: #D99A00;
-  --color-brass-700: #A67700;
-  --color-brass-800: #7A5900;
-  --color-brass-900: #4D3800;
-  --color-brass-950: #2E2100;
+  /* Safety-net remap for the previous design system's own token names
+     (graphite/brass/teal), which many files still reference directly and
+     this pass does not reach line-by-line in one sitting. graphite (the
+     old neutral scale) maps to the ink/paper family in the same direction
+     it's used today (950 = page background, 100 = primary text), so an
+     unmigrated `bg-graphite-950 text-graphite-100` reads correctly as
+     "paper background, ink text" with no edit at all. brass (the old
+     accent, used for BOTH highlighted text and filled buttons) maps its
+     text-weight shades to the new accent blue and its fill-weight shades
+     to ink or paper-dim -- never to blue -- so an unmigrated
+     `bg-brass-600` button falls back to an ink fill instead of silently
+     breaking the "blue never fills" rule. teal (unused as a UI accent in
+     the new system) maps to the muted/ink-soft family. Pages are still
+     being migrated off these names entirely; this exists so nothing
+     renders unstyled or rule-violating in the meantime. */
+  --color-graphite-50: var(--color-ink);
+  --color-graphite-100: var(--color-ink);
+  --color-graphite-200: var(--color-ink-soft);
+  --color-graphite-300: var(--color-ink-soft);
+  --color-graphite-400: var(--color-muted);
+  --color-graphite-500: var(--color-muted);
+  --color-graphite-600: var(--color-hairline);
+  --color-graphite-700: var(--color-hairline);
+  --color-graphite-800: var(--color-hairline);
+  --color-graphite-900: var(--color-paper-dim);
+  --color-graphite-950: var(--color-paper);
 
-  /* Muted teal -- secondary accent, used sparingly for interactive
-     elements only (never a primary CTA or the dominant color of a view). */
-  --color-teal-50: #EEF5F4;
-  --color-teal-100: #D7E6E4;
-  --color-teal-200: #B0CDC9;
-  --color-teal-300: #83B0AA;
-  --color-teal-400: #5C948C;
-  --color-teal-500: #497B74;
-  --color-teal-600: #3D6B66;
-  --color-teal-700: #2F5450;
-  --color-teal-800: #24403D;
-  --color-teal-900: #1A2F2D;
-  --color-teal-950: #101F1D;
+  --color-brass-50: var(--color-accent);
+  --color-brass-100: var(--color-accent);
+  --color-brass-200: var(--color-accent);
+  --color-brass-300: var(--color-accent);
+  --color-brass-400: var(--color-accent);
+  --color-brass-500: var(--color-ink);
+  --color-brass-600: var(--color-ink);
+  --color-brass-700: var(--color-ink);
+  --color-brass-800: var(--color-ink);
+  --color-brass-900: var(--color-paper-dim);
+  --color-brass-950: var(--color-paper-dim);
 
-  /* IBM Plex Sans for UI/body; IBM Plex Mono reserved for genuinely
-     machine-readable data (MRZ text, hashes, case IDs, timestamps) --
-     never general UI chrome. Unbounded is the display face for section
-     headings/titles only (bold, geometric, all the Neo-Brutalist pages use
-     it) -- never body copy or data. All three loaded in index.html. */
-  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
-  --font-display: "Unbounded", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --color-teal-50: var(--color-ink-soft);
+  --color-teal-100: var(--color-ink-soft);
+  --color-teal-200: var(--color-ink-soft);
+  --color-teal-300: var(--color-ink-soft);
+  --color-teal-400: var(--color-ink-soft);
+  --color-teal-500: var(--color-muted);
+  --color-teal-600: var(--color-muted);
+  --color-teal-700: var(--color-muted);
+  --color-teal-800: var(--color-hairline);
+  --color-teal-900: var(--color-hairline);
+  --color-teal-950: var(--color-paper);
+
+  /* Signal inks -- the one deliberate extension beyond the source design
+     spec, which defines a single accent and no severity system at all.
+     BorderMesh's risk tiers are a real triage signal officers scan tables
+     for, not decoration, so they get their own small ink family instead of
+     being flattened to a single color -- but used with the same restraint
+     as the accent blue: text and rules, never a filled area, except the
+     one filled square reserved for CRITICAL alone (see .badge-critical). */
+  --color-signal-low: #3F5039;
+  --color-signal-medium: #6B5324;
+  --color-signal-high: #733620;
+  --color-signal-critical: #5C1F19;
+
+  /* Tailwind's built-in emerald/amber/orange/rose/sky scales are used
+     throughout the codebase (status dots, icon colors, chart accents) --
+     remapped here to the signal-ink family instead of stock saturated
+     web colors, which would read as loud pastel-on-cream and clash with
+     the rest of this palette. Only the shades actually referenced in the
+     app are meaningfully distinct; the rest fill out the ramp for safety.
+     Every "950" (previously a dark translucent badge-fill background) is
+     mapped to paper-dim, since this system uses text/rules for severity,
+     never a filled badge -- any usage this pass didn't reach by hand still
+     lands as a paper-toned tint instead of a stray dark box. */
+  --color-emerald-50: #F3F5F1;
+  --color-emerald-100: #E4E9DF;
+  --color-emerald-200: #C7D1BC;
+  --color-emerald-300: #3F5039;
+  --color-emerald-400: #37452F;
+  --color-emerald-500: #37452F;
+  --color-emerald-600: #2E3A27;
+  --color-emerald-700: #26301F;
+  --color-emerald-800: #1E2519;
+  --color-emerald-900: #171C13;
+  --color-emerald-950: #E5DED0;
+
+  --color-amber-50: #F6F1E4;
+  --color-amber-100: #EDE1C4;
+  --color-amber-200: #D9C48A;
+  --color-amber-300: #6B5324;
+  --color-amber-400: #6B5324;
+  --color-amber-500: #6B5324;
+  --color-amber-600: #5A4520;
+  --color-amber-700: #49381A;
+  --color-amber-800: #382B14;
+  --color-amber-900: #271E0E;
+  --color-amber-950: #E5DED0;
+
+  --color-orange-50: #F5EDE6;
+  --color-orange-100: #E9D4C4;
+  --color-orange-200: #D9B599;
+  --color-orange-300: #733620;
+  --color-orange-400: #733620;
+  --color-orange-500: #733620;
+  --color-orange-600: #602D1A;
+  --color-orange-700: #4D2415;
+  --color-orange-800: #3A1B10;
+  --color-orange-900: #27120B;
+  --color-orange-950: #E5DED0;
+
+  --color-rose-50: #F5EDEA;
+  --color-rose-100: #E9D9D5;
+  --color-rose-200: #D9BEB7;
+  --color-rose-300: #5C1F19;
+  --color-rose-400: #5C1F19;
+  --color-rose-500: #5C1F19;
+  --color-rose-600: #4F1A15;
+  --color-rose-700: #421611;
+  --color-rose-800: #3A1310;
+  --color-rose-900: #2E0F0D;
+  --color-rose-950: #E5DED0;
+
+  --color-sky-50: #ECF0F7;
+  --color-sky-100: #D3DDEE;
+  --color-sky-200: #A7BBDD;
+  --color-sky-300: #2C4A8F;
+  --color-sky-400: #2C4A8F;
+  --color-sky-500: #2C4A8F;
+  --color-sky-600: #24406E;
+  --color-sky-700: #1D3459;
+  --color-sky-800: #172943;
+  --color-sky-900: #101D2F;
+  --color-sky-950: #E5DED0;
+
+  /* Newsreader (serif) carries every heading -- its italic is reserved for
+     the one emphasised phrase per heading, set in the accent blue. Courier
+     Prime (typewriter monospace) carries everything else: body copy,
+     labels, data, table cells -- it replaces IBM Plex Sans/Mono entirely,
+     since this system draws no distinction between "UI chrome" and
+     "machine-readable data" the way the previous one did. Both loaded in
+     index.html. */
+  --font-display: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --font-sans: "Courier Prime", "Courier New", ui-monospace, monospace;
+  --font-mono: "Courier Prime", "Courier New", ui-monospace, monospace;
+
+  /* Zero radius everywhere, including buttons -- overriding Tailwind's
+     scale directly means every already-written `rounded-lg`/`rounded-xl`/
+     `rounded-2xl` class in the app resolves to a square corner without
+     hunting down each usage. */
+  --radius-none: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+
+  /* No shadows anywhere except the one explicit exception (a real
+     photograph -- document scan or webcam frame -- via .photo-shadow,
+     which uses a literal box-shadow value, not this token, so it survives
+     this override). Zeroing the scale here kills every stray `shadow-md`/
+     `shadow-lg`/`shadow-*` utility already written across the app instead
+     of requiring each one to be found and removed by hand. */
+  --shadow-2xs: 0 0 #0000;
+  --shadow-xs: 0 0 #0000;
+  --shadow-sm: 0 0 #0000;
+  --shadow-md: 0 0 #0000;
+  --shadow-lg: 0 0 #0000;
+  --shadow-xl: 0 0 #0000;
+  --shadow-2xl: 0 0 #0000;
+  --shadow-inner: inset 0 0 #0000;
 }
 
 @layer base {
   body {
-    background-color: var(--color-graphite-950);
-    color: var(--color-graphite-100);
+    background-color: var(--color-paper);
+    color: var(--color-ink);
     font-family: var(--font-sans);
+    font-size: 12px;
+    letter-spacing: 0.03em;
+    line-height: 1.9;
     margin: 0;
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
   }
 
-  /* Custom scrollbar for operations dashboard */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    font-weight: 500;
+  }
+
+  em, i {
+    font-style: italic;
+    color: var(--color-accent);
+  }
+
+  /* Custom scrollbar for the operations dashboard */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: var(--color-graphite-950);
+    background: var(--color-paper);
   }
   ::-webkit-scrollbar-thumb {
-    background: var(--color-graphite-700);
-    border-radius: 3px;
+    background: var(--color-hairline);
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--color-graphite-600);
+    background: var(--color-muted);
   }
 
   @keyframes fade-in {
@@ -91,133 +233,275 @@
   .animate-fade-in {
     animation: fade-in 200ms ease-out;
   }
+
+  @keyframes draw-in {
+    to { stroke-dashoffset: 0; }
+  }
 }
 
 @layer components {
-  /* Primary CTA fill -- solid brass with dark text (not white: brass is a
-     bright gold/yellow, so a dark foreground is what stays legible on it,
-     the same reason the Terms/Privacy/Welcome pages never put white text
-     on a yellow fill either) plus a hard offset shadow instead of a soft
-     glow, and a press-down effect on click. Applied to every primary
-     "commit an action" button across the app (Apply policy, Start
-     screening, Anchor to blockchain, etc.) instead of one-off per-page
-     bg-brass-600/text-white classes.
-     The border is dark (reads against the bright fill), but the shadow is
-     a light warm gray, not black: it sits OUTSIDE the button, against this
-     app's near-black page background, where a black shadow has nothing to
-     contrast against and just vanishes (same reasoning as .glass-panel's
-     shadow above). */
-  .btn-brass {
-    background: var(--color-brass-500);
-    color: var(--color-graphite-950);
-    border: 1.5px solid var(--color-graphite-950);
-    box-shadow: 3px 3px 0 0 var(--color-graphite-500);
-    transition: transform 120ms ease, box-shadow 120ms ease, background-color 150ms ease;
+  /* ---- Buttons -------------------------------------------------------
+     Primary is a solid ink fill (ink may fill; only the accent blue may
+     not). Secondary is an outline that inverts on hover. Zero radius from
+     the theme override above. No shadow on either -- a flat printed
+     rectangle, not a raised button. */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: var(--color-ink);
+    color: var(--color-paper);
+    border: 1px solid var(--color-ink);
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    transition: background-color 150ms ease, color 150ms ease, opacity 150ms ease;
   }
-  .btn-brass:hover:not(:disabled) {
-    background: var(--color-brass-400);
-    transform: translate(-1px, -1px);
-    box-shadow: 4px 4px 0 0 var(--color-graphite-400);
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-ink-soft);
+    border-color: var(--color-ink-soft);
   }
-  .btn-brass:active:not(:disabled) {
-    background: var(--color-brass-600);
-    transform: translate(1px, 1px);
-    box-shadow: 1px 1px 0 0 var(--color-graphite-500);
-  }
-  .btn-brass:disabled {
-    opacity: 0.5;
+  .btn-primary:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
 
-  /* Flat Neo-Brutalist card -- the one card treatment every page/component
-     should use from here on (replaces plain `bg-graphite-900/80 border`
-     one-offs, and replaces this class's own earlier blurred-glass look:
-     see git history). Solid fill, a real 1.5px border instead of a
-     translucent hairline, and a hard offset shadow instead of a soft blur
-     -- no backdrop-filter, since a hard-edged panel reads as an object
-     sitting on the surface, not a pane of glass floating over one.
-     The offset shadow is a LIGHTER tone, not black: on a near-black page
-     background a black shadow has nothing to contrast against and simply
-     disappears (this is the dark-mode inverse of the classic light-mode
-     Neo-Brutalist black-on-white shadow -- same idea, opposite direction). */
-  .glass-panel {
-    background: var(--color-graphite-900);
-    border: 1.5px solid var(--color-graphite-700);
-    box-shadow: 3px 3px 0 0 var(--color-graphite-700);
-    transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: transparent;
+    color: var(--color-ink);
+    border: 1px solid var(--color-ink);
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    transition: background-color 150ms ease, color 150ms ease, opacity 150ms ease;
   }
-  .glass-panel:hover {
-    border-color: var(--color-brass-500);
-    box-shadow: 4px 4px 0 0 var(--color-brass-700);
-    transform: translate(-1px, -1px);
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--color-ink);
+    color: var(--color-paper);
   }
-
-  /* Stronger variant for chrome that sits above the page content (navbar,
-     sidebar) and needs more contrast. */
-  .glass-panel-strong {
-    background: var(--color-graphite-950);
-    border: 1.5px solid var(--color-graphite-800);
+  .btn-secondary:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
 
-  /* Long-form legal-document body copy (Privacy Policy, Terms &
-     Conditions) -- this app has no markdown-rendering/typography-plugin
-     dependency, so headings/paragraphs/lists/tables are styled by hand
-     here rather than via a generic `prose` class, kept consistent with
-     the rest of the brass/graphite system instead of a plugin's own
-     defaults. */
+  /* ---- Panels & rows ---------------------------------------------------
+     No cards. A "panel" is a hairline-bordered rectangle with no shadow
+     and no fill beyond the paper itself, replacing the old glass-panel.
+     A "rule-row" is the recurring label / description / right-aligned
+     value pattern from the source spec's argument/material/measurements
+     sections, reused for KPI strips, table-less lists, and settings rows. */
+  .panel {
+    background: var(--color-paper);
+    border: 1px solid var(--color-hairline);
+  }
+
+  .rule-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--color-hairline);
+  }
+  .rule-row:first-child {
+    border-top: 1px solid var(--color-hairline);
+  }
+
+  .label-eyebrow {
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    font-size: 0.68rem;
+    color: var(--color-muted);
+  }
+
+  .figure {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- Tabs / variant pickers -------------------------------------------
+     Every tab bar in the app (document-inspection views, risk filters,
+     demo scenarios) is the source spec's "row of variant buttons using
+     aria-pressed" -- flat text, active state marked by an underline rule,
+     never a filled pill. */
+  .tab-flat {
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    font-size: 0.72rem;
+    color: var(--color-muted);
+    padding: 0.6rem 0.1rem;
+    border-bottom: 2px solid transparent;
+    transition: color 150ms ease, border-color 150ms ease;
+  }
+  .tab-flat:hover {
+    color: var(--color-ink);
+  }
+  .tab-flat[aria-pressed="true"], .tab-flat[aria-selected="true"] {
+    color: var(--color-ink);
+    border-bottom-color: var(--color-ink);
+  }
+  .tab-flat[aria-pressed="true"].tab-flat-accent, .tab-flat[aria-selected="true"].tab-flat-accent {
+    border-bottom-color: var(--color-accent);
+  }
+
+  /* ---- Severity (signal-ink) --------------------------------------------
+     Plain colored Courier text, never a filled badge -- except CRITICAL,
+     which alone also gets a small solid square "seal," a deliberate single
+     exception (see the design-review discussion in git history) so the
+     one state that most needs to interrupt a scan still can. */
+  .badge-signal {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    font-weight: 700;
+    font-size: inherit;
+  }
+  .badge-signal::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border: 1px solid currentColor;
+    flex-shrink: 0;
+  }
+  .badge-low { color: var(--color-signal-low); }
+  .badge-medium { color: var(--color-signal-medium); }
+  .badge-high { color: var(--color-signal-high); }
+  .badge-critical { color: var(--color-signal-critical); }
+  .badge-critical::before { background: currentColor; }
+  .badge-neutral { color: var(--color-ink-soft); }
+  .badge-accent { color: var(--color-accent); }
+  .badge-pending { color: var(--color-accent); }
+  .badge-pending::before { animation: pulse-outline 1.6s ease-in-out infinite; }
+  @keyframes pulse-outline {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+
+  /* ---- Form fields -------------------------------------------------------
+     No bordered box: a single bottom hairline that thickens and turns
+     accent blue on focus (blue as a rule, per the source spec). */
+  .field {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--color-hairline);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    padding: 0.5rem 0.1rem;
+    transition: border-color 150ms ease;
+  }
+  .field:focus {
+    outline: none;
+    border-bottom: 2px solid var(--color-accent);
+    padding-bottom: calc(0.5rem - 1px);
+  }
+  .field::placeholder {
+    color: var(--color-muted);
+  }
+
+  /* Slider: the row's own bottom hairline doubles as the track. */
+  .field-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 1px;
+    background: var(--color-hairline);
+    margin: 0.9rem 0;
+  }
+  .field-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 10px;
+    height: 10px;
+    background: var(--color-ink);
+    border: none;
+    cursor: pointer;
+  }
+  .field-range::-moz-range-thumb {
+    width: 10px;
+    height: 10px;
+    background: var(--color-ink);
+    border: none;
+    cursor: pointer;
+  }
+
+  /* ---- The one shadow exception: real photographs -------------------- */
+  .photo-shadow {
+    box-shadow: 6px 6px 0 0 var(--color-hairline);
+  }
+
+  /* ---- Alerts / banners ------------------------------------------------
+     A hairline-topped-and-bottomed strip, never a filled colored box. */
+  .strip {
+    border-top: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-hairline);
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    color: var(--color-ink-soft);
+  }
+
+  /* ---- Long-form legal-document body copy (Privacy Policy, Terms) ---- */
   .legal-prose {
-    color: var(--color-graphite-300);
-    font-size: 0.9rem;
-    line-height: 1.7;
+    color: var(--color-ink-soft);
+    font-size: 0.85rem;
+    line-height: 1.9;
   }
   .legal-prose h2 {
-    color: var(--color-graphite-100);
-    font-size: 1.15rem;
-    font-weight: 700;
+    font-family: var(--font-display);
+    color: var(--color-ink);
+    font-size: 1.3rem;
+    font-weight: 500;
     margin-top: 2.25rem;
     margin-bottom: 0.75rem;
     padding-bottom: 0.5rem;
-    border-bottom: 1px solid color-mix(in srgb, var(--color-graphite-700) 55%, transparent);
+    border-bottom: 1px solid var(--color-hairline);
   }
   .legal-prose h2:first-child { margin-top: 0; }
   .legal-prose p { margin: 0.9rem 0; }
-  .legal-prose strong { color: var(--color-graphite-100); font-weight: 600; }
+  .legal-prose strong { color: var(--color-ink); font-weight: 700; }
   .legal-prose ul, .legal-prose ol {
     margin: 0.9rem 0;
     padding-left: 1.25rem;
   }
   .legal-prose li { margin: 0.4rem 0; }
-  .legal-prose li::marker { color: var(--color-brass-500); }
+  .legal-prose li::marker { color: var(--color-accent); }
   .legal-prose code {
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-size: 0.85em;
-    background: color-mix(in srgb, var(--color-graphite-800) 70%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-graphite-700) 55%, transparent);
-    border-radius: 4px;
+    border: 1px solid var(--color-hairline);
     padding: 0.1em 0.4em;
-    color: var(--color-brass-300);
+    color: var(--color-ink);
   }
   .legal-prose table {
     width: 100%;
     border-collapse: collapse;
     margin: 1rem 0;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
   }
   .legal-prose th {
     text-align: left;
-    color: var(--color-graphite-400);
+    color: var(--color-muted);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
-    font-size: 0.7rem;
-    font-weight: 600;
+    letter-spacing: 0.07em;
+    font-size: 0.68rem;
+    font-weight: 700;
     padding: 0.5rem 0.75rem;
-    border-bottom: 1px solid color-mix(in srgb, var(--color-graphite-700) 65%, transparent);
+    border-bottom: 1px solid var(--color-hairline);
   }
   .legal-prose td {
     padding: 0.6rem 0.75rem;
-    border-bottom: 1px solid color-mix(in srgb, var(--color-graphite-800) 70%, transparent);
+    border-bottom: 1px solid var(--color-hairline);
     vertical-align: top;
   }
   .legal-prose > p:first-of-type {
-    color: var(--color-graphite-200);
+    color: var(--color-ink);
   }
 }

@@ -8,7 +8,6 @@ import {
   History,
   Settings,
   Shield,
-  Radio,
   GitCompare,
   Scale
 } from 'lucide-react';
@@ -37,29 +36,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   return (
-    <aside className="w-64 glass-panel-strong border-y-0 border-l-0 flex flex-col justify-between shrink-0 select-none z-20">
+    <aside className="w-64 bg-paper border-r border-hairline flex flex-col justify-between shrink-0 select-none z-20">
       <div>
-        {/* Brand Header */}
-        <div className="p-5 border-b-[1.5px] border-graphite-800 flex items-center gap-3">
-          {/* Flat, hard-bordered brand mark -- a solid fill + a real black
-              border reads as a logotype block, not a soft glowing gradient. */}
-          <div className="h-9 w-9 rounded-lg bg-brass-500 flex items-center justify-center shadow-[2px_2px_0_0_rgba(0,0,0,0.7)] border-[1.5px] border-graphite-950">
-            <Shield className="w-5 h-5 text-graphite-950" />
-          </div>
+        {/* Brand header -- serif wordmark with a trailing accent period,
+            per the nav bar spec, rather than a logo mark. */}
+        <div className="px-5 py-5 border-b border-hairline flex items-center gap-2.5">
+          <Shield className="w-[18px] h-[18px] text-ink shrink-0" strokeWidth={1.75} />
           <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-display font-bold text-base tracking-tight text-graphite-100">
-                BORDER<span className="text-brass-400">MESH</span>
-              </span>
-            </div>
-            <p className="text-[10px] text-graphite-400 tracking-wide uppercase">
-              AI Identity Screening
+            <span className="font-display text-[19px] tracking-tight text-ink">
+              BorderMesh<span className="text-accent">.</span>
+            </span>
+            <p className="text-[10px] text-muted tracking-[0.09em] uppercase -mt-0.5">
+              AI identity screening
             </p>
           </div>
         </div>
 
-        {/* Navigation Menu */}
-        <nav className="p-3 space-y-1">
+        {/* Navigation -- a hairline-ruled list, not buttons with a fill;
+            active state is a left ink rule, never a filled pill. */}
+        <nav className="py-2">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = currentTab === item.id;
@@ -67,20 +62,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 key={item.id}
                 onClick={() => onSelectTab(item.id)}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
+                className={`w-full flex items-center justify-between gap-3 px-5 py-2.5 text-[11px] uppercase tracking-[0.06em] cursor-pointer border-l-2 transition-colors duration-150 ${
                   active
-                    ? 'bg-brass-950 text-brass-300 border-[1.5px] border-brass-600 border-l-[3px] border-l-brass-500 font-semibold'
-                    : 'text-graphite-400 hover:text-graphite-200 hover:bg-graphite-900/60 border-[1.5px] border-transparent'
+                    ? 'border-l-ink text-ink font-bold'
+                    : 'border-l-transparent text-ink-soft hover:text-ink'
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <Icon className={`w-4 h-4 ${active ? 'text-brass-400' : 'text-graphite-400'}`} />
+                <span className="flex items-center gap-3">
+                  <Icon className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
                   <span>{item.label}</span>
-                </div>
+                </span>
                 {item.badge !== undefined && item.badge > 0 && (
-                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                    {item.badge}
-                  </span>
+                  <span className="text-signal-medium font-bold">{item.badge}</span>
                 )}
               </button>
             );
@@ -88,28 +81,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      {/* System Status Footer */}
-      <div className="glass-panel p-4 m-3 rounded-xl space-y-2 text-xs">
-        <div className="flex items-center justify-between text-graphite-300 text-[11px]">
-          <span className="flex items-center gap-1.5 text-graphite-400">
-            <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-            AI Pipeline
-          </span>
-          <span className="text-emerald-400 font-bold">ONLINE</span>
+      {/* System status footer -- hairline rows, no boxed panel. */}
+      <div className="px-5 py-4 border-t border-hairline text-[10px] space-y-2">
+        <div className="flex items-center justify-between text-ink-soft">
+          <span>AI Pipeline</span>
+          <span className="text-accent font-bold uppercase">Online</span>
         </div>
-        <div className="flex items-center justify-between gap-2 text-[11px] text-graphite-400">
+        <div className="flex items-center justify-between gap-2 text-ink-soft">
           <span className="truncate">Watchlist Adapter</span>
-          <span className="text-brass-400 shrink-0">Sandbox Demo</span>
+          <span className="shrink-0">Sandbox Demo</span>
         </div>
-        <div className="pt-1.5 border-t border-graphite-800/60 text-[10px] text-graphite-400">
-          SIH Problem: <span className="text-graphite-400">SIH26188</span>
+        <div className="pt-2 border-t border-hairline text-muted">
+          SIH Problem: SIH26188
         </div>
-        <div className="flex items-center gap-2.5 text-[10px] text-graphite-500 flex-wrap">
-          <a href="/welcome" className="hover:text-brass-400 transition-colors">About</a>
-          <span className="text-graphite-700">·</span>
-          <a href="/privacy" className="hover:text-brass-400 transition-colors">Privacy Policy</a>
-          <span className="text-graphite-700">·</span>
-          <a href="/terms" className="hover:text-brass-400 transition-colors">Terms</a>
+        <div className="flex items-center gap-2 text-muted flex-wrap pt-1">
+          <a href="/welcome" className="hover:text-accent transition-colors">About</a>
+          <span>&middot;</span>
+          <a href="/privacy" className="hover:text-accent transition-colors">Privacy Policy</a>
+          <span>&middot;</span>
+          <a href="/terms" className="hover:text-accent transition-colors">Terms</a>
         </div>
       </div>
     </aside>

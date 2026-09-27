@@ -17,7 +17,7 @@ describe('WelcomePage', () => {
 
   it('discloses known limitations up front instead of only claiming accuracy', () => {
     render(<WelcomePage />);
-    expect(screen.getByText(/39\.5%/)).toBeInTheDocument();
+    expect(screen.getAllByText(/39\.5%/).length).toBeGreaterThan(0);
     const termsLinks = screen.getAllByRole('link', { name: /Terms/ });
     expect(termsLinks.some((a) => a.getAttribute('href') === '/terms')).toBe(true);
   });
@@ -30,6 +30,6 @@ describe('WelcomePage', () => {
 
   it('states plainly this is a decision-support demo, not a live operational system', () => {
     render(<WelcomePage />);
-    expect(screen.getByText(/not a live operational screening system/)).toBeInTheDocument();
+    expect(screen.getByText(/Not for use in live operational screening/)).toBeInTheDocument();
   });
 });
