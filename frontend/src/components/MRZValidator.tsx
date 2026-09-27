@@ -2,6 +2,7 @@ import React from 'react';
 import { MRZResult, ValidationResult } from '../types';
 import { Binary, CheckCircle2, XCircle, AlertTriangle, Info } from 'lucide-react';
 import { SectionHeading } from './SectionHeading';
+import { ScrollReveal } from './ScrollReveal';
 
 interface MRZValidatorProps {
   mrz?: MRZResult;
@@ -24,7 +25,7 @@ interface MRZValidatorProps {
 const NON_MRZ_DOCUMENT_TYPES = new Set(['AADHAAR', 'PAN', 'DRIVING_LICENSE', 'VOTER_ID', 'VISA']);
 
 const EmptyState: React.FC<{ variant: 'expected' | 'missing' }> = ({ variant }) => (
-  <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-6 backdrop-blur text-center transition-all duration-300 hover:border-graphite-700/60">
+  <div className="glass-panel rounded-xl p-6 text-center">
     <div className={`flex items-center justify-center gap-2 mb-2 text-sm font-semibold ${variant === 'expected' ? 'text-graphite-400' : 'text-amber-400'}`}>
       {variant === 'expected' ? <Info className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
       <span>MRZ extraction</span>
@@ -50,7 +51,7 @@ export const MRZValidator: React.FC<MRZValidatorProps> = ({ mrz, validation, doc
   }
 
   return (
-    <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-5 backdrop-blur space-y-5 transition-all duration-300 hover:border-graphite-700/60">
+    <ScrollReveal className="glass-panel rounded-xl p-5 space-y-5">
       <SectionHeading
         level="h3"
         title="ICAO 9303 MRZ validation"
@@ -162,6 +163,6 @@ export const MRZValidator: React.FC<MRZValidatorProps> = ({ mrz, validation, doc
           </div>
         </div>
       )}
-    </div>
+    </ScrollReveal>
   );
 };

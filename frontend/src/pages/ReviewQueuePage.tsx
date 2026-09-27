@@ -5,6 +5,7 @@ import { RiskBadge } from '../components/RiskBadge';
 import { ScrollShadowX } from '../components/ScrollShadowX';
 import { Inbox, Search, ChevronRight, Loader2 } from 'lucide-react';
 import { SectionHeading } from '../components/SectionHeading';
+import { ScrollReveal } from '../components/ScrollReveal';
 
 interface ReviewQueuePageProps {
   onSelectCase: (caseId: string) => void;
@@ -115,7 +116,7 @@ export const ReviewQueuePage: React.FC<ReviewQueuePageProps> = ({ onSelectCase }
       </div>
 
       {/* Queue Table */}
-      <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl overflow-hidden backdrop-blur transition-all duration-300 hover:border-graphite-700/60">
+      <ScrollReveal className="glass-panel rounded-xl overflow-hidden">
         {loading ? (
           <LoadingState />
         ) : filtered.length === 0 ? (
@@ -179,7 +180,7 @@ export const ReviewQueuePage: React.FC<ReviewQueuePageProps> = ({ onSelectCase }
             </table>
           </ScrollShadowX>
         )}
-      </div>
+      </ScrollReveal>
     </div>
   );
 };

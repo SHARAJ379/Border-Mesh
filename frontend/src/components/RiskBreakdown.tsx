@@ -2,6 +2,7 @@ import React from 'react';
 import { RiskFactorContribution } from '../types';
 import { Sliders } from 'lucide-react';
 import { SectionHeading } from './SectionHeading';
+import { ScrollReveal } from './ScrollReveal';
 
 interface RiskBreakdownProps {
   breakdown: RiskFactorContribution[];
@@ -10,7 +11,7 @@ interface RiskBreakdownProps {
 
 export const RiskBreakdown: React.FC<RiskBreakdownProps> = ({ breakdown, totalScore }) => {
   return (
-    <div className="bg-graphite-900/80 border border-graphite-800 rounded-xl p-5 backdrop-blur space-y-4">
+    <ScrollReveal className="glass-panel rounded-xl p-5 space-y-4">
       <SectionHeading
         level="h3"
         title="Explainable risk breakdown"
@@ -76,6 +77,6 @@ export const RiskBreakdown: React.FC<RiskBreakdownProps> = ({ breakdown, totalSc
           );
         })}
       </div>
-    </div>
+    </ScrollReveal>
   );
 };

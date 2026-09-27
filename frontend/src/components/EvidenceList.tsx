@@ -3,13 +3,14 @@ import { RiskSignal } from '../types';
 import { ShieldAlert } from 'lucide-react';
 import { RiskBadge } from './RiskBadge';
 import { SectionHeading } from './SectionHeading';
+import { ScrollReveal } from './ScrollReveal';
 
 interface EvidenceListProps {
   signals: RiskSignal[];
 }
 
 const EmptyState: React.FC = () => (
-  <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-6 backdrop-blur text-center transition-all duration-300 hover:border-graphite-700/60">
+  <div className="glass-panel rounded-xl p-6 text-center">
     <ShieldAlert className="w-8 h-8 text-graphite-600 mx-auto mb-2" />
     <p className="text-xs text-graphite-500">No forensic evidence signals recorded.</p>
   </div>
@@ -26,7 +27,7 @@ export const EvidenceList: React.FC<EvidenceListProps> = ({ signals }) => {
   const severityOrder = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const;
 
   return (
-    <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-5 backdrop-blur space-y-5 transition-all duration-300 hover:border-graphite-700/60">
+    <ScrollReveal className="glass-panel rounded-xl p-5 space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <SectionHeading
           level="h3"
@@ -88,6 +89,6 @@ export const EvidenceList: React.FC<EvidenceListProps> = ({ signals }) => {
           ))}
         </div>
       )}
-    </div>
+    </ScrollReveal>
   );
 };

@@ -80,7 +80,7 @@ export const CaseHeader: React.FC<CaseHeaderProps> = ({
   const createdFormatted = new Date(caseData.created_at).toLocaleString();
 
   return (
-    <div className="bg-graphite-900/90 border border-graphite-800/80 rounded-xl p-5 shadow-lg shadow-brass-950/20 backdrop-blur space-y-5 transition-all duration-300 hover:border-graphite-700/60">
+    <div className="glass-panel rounded-xl p-5 space-y-5">
       {/* Top Banner */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-graphite-800/60">
         <div>

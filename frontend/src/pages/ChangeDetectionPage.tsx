@@ -3,6 +3,7 @@ import { ChangeDetectionResult } from '../types';
 import { api } from '../services/api';
 import { SectionHeading } from '../components/SectionHeading';
 import { RiskBadge } from '../components/RiskBadge';
+import { ScrollReveal } from '../components/ScrollReveal';
 import { GitCompare, Loader2, Play, CheckCircle2, XCircle, ScanFace } from 'lucide-react';
 
 /**
@@ -17,7 +18,7 @@ import { GitCompare, Loader2, Play, CheckCircle2, XCircle, ScanFace } from 'luci
  * submission can.
  */
 const IntroState: React.FC = () => (
-  <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-6 text-xs text-graphite-400 space-y-2 transition-all duration-300 hover:border-graphite-700/60">
+  <div className="glass-panel rounded-xl p-6 text-xs text-graphite-400 space-y-2">
     <p>
       This generates two fictional "REPUBLIC OF UTOPIA" specimens claiming the
       same identity — same surname, given names, document number, nationality
@@ -112,7 +113,7 @@ export const ChangeDetectionPage: React.FC = () => {
       {result && (
         <div className="space-y-5 animate-fade-in">
           {/* Identity summary */}
-          <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs transition-all duration-300 hover:border-graphite-700/60">
+          <ScrollReveal className="glass-panel rounded-xl p-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
             <div>
               <span className="text-graphite-500">Claimed identity: </span>
               <span className="text-graphite-200 font-semibold">
@@ -136,14 +137,14 @@ export const ChangeDetectionPage: React.FC = () => {
                 {result.changed_field_count} of {result.field_diffs.length} fields changed
               </span>
             </div>
-          </div>
+          </ScrollReveal>
 
           {/* Side-by-side specimens */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <ScrollReveal className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {(['v1', 'v2'] as const).map((v) => {
               const version = result[v];
               return (
-                <div key={v} className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-4 space-y-3 transition-all duration-300 hover:border-graphite-700/60">
+                <div key={v} className="glass-panel rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-graphite-200">{version.label}</span>
                     <span
@@ -168,10 +169,10 @@ export const ChangeDetectionPage: React.FC = () => {
                 </div>
               );
             })}
-          </div>
+          </ScrollReveal>
 
           {/* Field diff table */}
-          <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-4 transition-all duration-300 hover:border-graphite-700/60">
+          <ScrollReveal className="glass-panel rounded-xl p-4">
             <h3 className="text-sm font-semibold text-graphite-200 mb-3">Field-level comparison</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
@@ -208,10 +209,10 @@ export const ChangeDetectionPage: React.FC = () => {
                 </tbody>
               </table>
             </div>
-          </div>
+          </ScrollReveal>
 
           {/* Portrait comparison */}
-          <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-5 space-y-4 transition-all duration-300 hover:border-graphite-700/60">
+          <ScrollReveal className="glass-panel rounded-xl p-5 space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-graphite-200 flex items-center gap-2">
                 <ScanFace className="w-4 h-4 text-graphite-500" />
@@ -261,7 +262,7 @@ export const ChangeDetectionPage: React.FC = () => {
                 {result.portrait_comparison.status.replace(/_/g, ' ')}
               </span>
             </div>
-          </div>
+          </ScrollReveal>
         </div>
       )}
     </div>

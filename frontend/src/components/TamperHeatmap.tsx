@@ -3,6 +3,7 @@ import { TamperResult } from '../types';
 import { Layers, Eye, Flame, AlertOctagon, ScanSearch, CheckCircle2 } from 'lucide-react';
 import { RiskBadge } from './RiskBadge';
 import { SectionHeading } from './SectionHeading';
+import { ScrollReveal } from './ScrollReveal';
 
 interface TamperHeatmapProps {
   originalImageUrl?: string;
@@ -10,7 +11,7 @@ interface TamperHeatmapProps {
 }
 
 const EmptyState: React.FC = () => (
-  <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-6 backdrop-blur text-center transition-all duration-300 hover:border-graphite-700/60">
+  <div className="glass-panel rounded-xl p-6 text-center">
     <Layers className="w-8 h-8 text-graphite-600 mx-auto mb-2" />
     <p className="text-xs text-graphite-500">No tamper forensic analysis conducted yet.</p>
   </div>
@@ -35,7 +36,7 @@ export const TamperHeatmap: React.FC<TamperHeatmapProps> = ({
   ] as const;
 
   return (
-    <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-5 backdrop-blur space-y-5 transition-all duration-300 hover:border-graphite-700/60">
+    <ScrollReveal className="glass-panel rounded-xl p-5 space-y-5">
       {/* Header */}
       <SectionHeading
         level="h3"
@@ -156,6 +157,6 @@ export const TamperHeatmap: React.FC<TamperHeatmapProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </ScrollReveal>
   );
 };

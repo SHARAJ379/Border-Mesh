@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { DpdpComplianceStatus } from '../types';
 import { api } from '../services/api';
 import { SectionHeading } from '../components/SectionHeading';
+import { ScrollReveal } from '../components/ScrollReveal';
 import {
   Scale,
   Lock,
@@ -147,7 +148,7 @@ export const ComplianceDashboardPage: React.FC = () => {
       </div>
 
       {/* Principle cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <ScrollReveal className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Security Safeguards */}
         <PrincipleCard principle={PRINCIPLES[0]}>
           <Fact label="Encryption algorithm" value={status.encryption.algorithm} />
@@ -217,7 +218,7 @@ export const ComplianceDashboardPage: React.FC = () => {
             <span className="text-graphite-200 font-semibold">{hashCoverage}% of stored cases</span>
           </div>
         </PrincipleCard>
-      </div>
+      </ScrollReveal>
 
       {/* Known gaps — not hidden */}
       <div className="bg-rose-950/30 border border-rose-500/30 rounded-xl p-4 space-y-2 animate-fade-in">
@@ -233,14 +234,14 @@ export const ComplianceDashboardPage: React.FC = () => {
       </div>
 
       {/* What's not claimed */}
-      <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-4 space-y-2 transition-all duration-300 hover:border-graphite-700/60 animate-fade-in">
+      <ScrollReveal className="glass-panel rounded-xl p-4 space-y-2">
         <h3 className="text-sm font-semibold text-graphite-300">Not implemented — not claimed</h3>
         <ul className="text-xs text-graphite-500 space-y-1 list-disc list-inside">
           {NOT_IMPLEMENTED.map((item, i) => (
             <li key={i}>{item}</li>
           ))}
         </ul>
-      </div>
+      </ScrollReveal>
 
       <p className="text-[10px] text-graphite-500">
         Generated {new Date(status.generated_at).toLocaleString()}
@@ -250,7 +251,7 @@ export const ComplianceDashboardPage: React.FC = () => {
 };
 
 const PrincipleCard: React.FC<{ principle: Principle; children: React.ReactNode }> = ({ principle, children }) => (
-  <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-4 space-y-2.5 transition-all duration-300 hover:border-graphite-700/60 animate-fade-in" style={{ animationDelay: '0ms' }}>
+  <div className="glass-panel rounded-xl p-4 space-y-2.5">
     <div className="flex items-start justify-between gap-2">
       <div className="flex items-center gap-2">
         <div className="p-2 rounded-lg bg-brass-950/50 border border-brass-500/30">

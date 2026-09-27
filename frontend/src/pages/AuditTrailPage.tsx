@@ -3,6 +3,7 @@ import { AuditLog, ChainVerificationResult, BlockchainAnchor } from '../types';
 import { api } from '../services/api';
 import { ScrollShadowX } from '../components/ScrollShadowX';
 import { SectionHeading } from '../components/SectionHeading';
+import { ScrollReveal } from '../components/ScrollReveal';
 import {
   ShieldCheck,
   ShieldAlert,
@@ -175,7 +176,7 @@ export const AuditTrailPage: React.FC<AuditTrailPageProps> = ({ onSelectCase }) 
 
       {/* Testnet anchoring — publishes the head hash above to a public
           blockchain so it can be verified independently of this app */}
-      <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-4 space-y-3 transition-all duration-300 hover:border-graphite-700/60">
+      <ScrollReveal className="glass-panel rounded-xl p-4 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-start gap-2.5">
             <div className="p-2 rounded-lg bg-brass-950/50 border border-brass-500/30">
@@ -224,7 +225,7 @@ export const AuditTrailPage: React.FC<AuditTrailPageProps> = ({ onSelectCase }) 
             ))}
           </div>
         )}
-      </div>
+      </ScrollReveal>
 
       {/* Filters + search — plain row, no card */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -260,7 +261,7 @@ export const AuditTrailPage: React.FC<AuditTrailPageProps> = ({ onSelectCase }) 
       </div>
 
       {/* Logs table — the one real surface on this page */}
-      <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl overflow-hidden backdrop-blur transition-all duration-300 hover:border-graphite-700/60">
+      <ScrollReveal className="glass-panel rounded-xl overflow-hidden">
         {loading ? (
           <LoadingState />
         ) : filtered.length === 0 ? (
@@ -360,7 +361,7 @@ export const AuditTrailPage: React.FC<AuditTrailPageProps> = ({ onSelectCase }) 
             </table>
           </ScrollShadowX>
         )}
-      </div>
+      </ScrollReveal>
     </div>
   );
 };

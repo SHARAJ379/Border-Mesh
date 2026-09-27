@@ -22,6 +22,7 @@ export const QuickDemoBar: React.FC<QuickDemoBarProps> = ({ onScenarioLoaded }) 
     { key: 'voter_id', label: '9. Voter ID (EPIC) Verification', desc: 'Genuine EPIC, structural format check passes' },
     { key: 'duplicate_identity', label: '10. Duplicate Identity Detection', desc: 'Two different fabricated identities, same real face — caught by cross-case gallery match' },
     { key: 'visa', label: '11. Travel Visa — Stay Duration Expired', desc: 'No MRZ, but an overstayed printed stay duration the rules engine now checks' },
+    { key: 'permit', label: '12. Residence Permit — Expired', desc: 'No MRZ, but a genuine printed expiry hooked into the same expiration rule as a Driving Licence' },
   ];
 
   const handleRun = async () => {
@@ -37,7 +38,7 @@ export const QuickDemoBar: React.FC<QuickDemoBarProps> = ({ onScenarioLoaded }) 
   };
 
   return (
-    <div className="bg-graphite-950 border-b border-graphite-800/60 px-6 py-1.5 flex flex-wrap items-center gap-3 text-xs">
+    <div className="border-b border-graphite-800/60 px-6 py-1.5 flex flex-wrap items-center gap-3 text-xs">
       <span className="text-graphite-500 shrink-0">Demo scenario:</span>
 
       <select

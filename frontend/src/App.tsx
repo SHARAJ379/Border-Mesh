@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { lazy, Suspense, useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
 import { PrivacyNotice } from './components/PrivacyNotice';
+import { useLenis } from './lib/useLenis';
+import { ScrollerContext } from './lib/ScrollerContext';
 import { DashboardPage } from './pages/DashboardPage';
 import { ScreeningPage } from './pages/ScreeningPage';
 import { ReviewQueuePage } from './pages/ReviewQueuePage';
@@ -13,9 +15,18 @@ import { CaseDetailPage } from './pages/CaseDetailPage';
 import { ChangeDetectionPage } from './pages/ChangeDetectionPage';
 import { ComplianceDashboardPage } from './pages/ComplianceDashboardPage';
 
+// Three.js/R3F/drei are the single heaviest dependency in this app --
+// lazy-loaded so the WebGL background never blocks first paint or adds to
+// the critical-path bundle on slow/mobile connections.
+const SceneBackground = lazy(() =>
+  import('./three/SceneBackground').then((m) => ({ default: m.SceneBackground }))
+);
+
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [scrollerNode, setScrollerNode] = useState<HTMLElement | null>(null);
+  useLenis(scrollerNode);
 
   const handleSelectCase = (caseId: string) => {
     setSelectedCaseId(caseId);
@@ -33,7 +44,11 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-[#070a12] text-graphite-100 overflow-hidden font-sans">
+    <div className="relative flex h-screen bg-graphite-950 text-graphite-100 overflow-hidden font-sans">
+      <Suspense fallback={null}>
+        <SceneBackground />
+      </Suspense>
+
       {/* Sidebar */}
       <Sidebar
         currentTab={currentTab}
@@ -44,13 +59,15 @@ export const App: React.FC = () => {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="relative z-10 flex-1 flex flex-col min-w-0 overflow-hidden">
         <Navbar
           currentTab={currentTab}
           onScenarioLoaded={handleScenarioLoaded}
         />
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+        <main ref={setScrollerNode} className="flex-1 overflow-y-auto">
+        <ScrollerContext.Provider value={scrollerNode}>
+        <div className="p-4 sm:p-6 space-y-4">
           <PrivacyNotice />
 
           {currentTab === 'dashboard' && (
@@ -99,6 +116,8 @@ export const App: React.FC = () => {
               onBack={handleBackFromDetail}
             />
           )}
+        </div>
+        </ScrollerContext.Provider>
         </main>
       </div>
     </div>

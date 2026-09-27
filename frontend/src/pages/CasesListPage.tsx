@@ -5,6 +5,7 @@ import { RiskBadge } from '../components/RiskBadge';
 import { ScrollShadowX } from '../components/ScrollShadowX';
 import { FileText, Search, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
 import { SectionHeading } from '../components/SectionHeading';
+import { ScrollReveal } from '../components/ScrollReveal';
 
 interface CasesListPageProps {
   onSelectCase: (caseId: string) => void;
@@ -90,7 +91,7 @@ export const CasesListPage: React.FC<CasesListPageProps> = ({ onSelectCase }) =>
 
           <button
             onClick={fetchCases}
-            className="p-2.5 rounded-lg bg-graphite-900/80 border border-graphite-800/80 text-graphite-400 hover:text-graphite-200 hover:border-graphite-700/60 cursor-pointer transition-all"
+            className="glass-panel p-2.5 rounded-lg text-graphite-400 hover:text-graphite-200 cursor-pointer"
             title="Refresh cases"
           >
             <RefreshCw className="w-4 h-4" />
@@ -116,7 +117,7 @@ export const CasesListPage: React.FC<CasesListPageProps> = ({ onSelectCase }) =>
       </div>
 
       {/* Table */}
-      <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl overflow-hidden backdrop-blur transition-all duration-300 hover:border-graphite-700/60">
+      <ScrollReveal className="glass-panel rounded-xl overflow-hidden">
         {loading ? (
           <LoadingState />
         ) : filtered.length === 0 ? (
@@ -184,7 +185,7 @@ export const CasesListPage: React.FC<CasesListPageProps> = ({ onSelectCase }) =>
             </table>
           </ScrollShadowX>
         )}
-      </div>
+      </ScrollReveal>
     </div>
   );
 };

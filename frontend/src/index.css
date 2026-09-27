@@ -85,3 +85,36 @@
     animation: fade-in 200ms ease-out;
   }
 }
+
+@layer components {
+  /* Glassmorphism card -- the one card treatment every page/component
+     should use from here on (replaces plain `bg-graphite-900/80 border`
+     one-offs). Translucent so the 3D mesh network behind the app reads
+     through faintly; brass border-glow on hover ties it to the accent
+     system instead of a generic white-glass look. */
+  .glass-panel {
+    background: color-mix(in srgb, var(--color-graphite-900) 72%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-graphite-700) 55%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow:
+      inset 0 1px 0 0 color-mix(in srgb, var(--color-graphite-400) 8%, transparent),
+      0 8px 24px -12px rgba(0, 0, 0, 0.55);
+    transition: border-color 220ms ease, box-shadow 220ms ease;
+  }
+  .glass-panel:hover {
+    border-color: color-mix(in srgb, var(--color-brass-500) 40%, transparent);
+    box-shadow:
+      inset 0 1px 0 0 color-mix(in srgb, var(--color-graphite-400) 8%, transparent),
+      0 8px 28px -10px color-mix(in srgb, var(--color-brass-900) 60%, transparent);
+  }
+
+  /* Stronger variant for chrome that sits directly over the busiest part
+     of the 3D layer (navbar, sidebar) and needs more contrast. */
+  .glass-panel-strong {
+    background: color-mix(in srgb, var(--color-graphite-950) 82%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-graphite-700) 65%, transparent);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+}

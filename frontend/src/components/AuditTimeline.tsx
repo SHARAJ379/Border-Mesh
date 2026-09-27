@@ -2,13 +2,14 @@ import React from 'react';
 import { AuditLog } from '../types';
 import { History, Shield, User, Bot, Clock, Link, Lock, FileKey } from 'lucide-react';
 import { SectionHeading } from './SectionHeading';
+import { ScrollReveal } from './ScrollReveal';
 
 interface AuditTimelineProps {
   logs: AuditLog[];
 }
 
 const EmptyState: React.FC = () => (
-  <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-6 backdrop-blur text-center transition-all duration-300 hover:border-graphite-700/60">
+  <div className="glass-panel rounded-xl p-6 text-center">
     <History className="w-8 h-8 text-graphite-600 mx-auto mb-2" />
     <p className="text-xs text-graphite-500">No audit log events recorded for this case.</p>
   </div>
@@ -20,7 +21,7 @@ export const AuditTimeline: React.FC<AuditTimelineProps> = ({ logs }) => {
   }
 
   return (
-    <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-5 backdrop-blur space-y-5 transition-all duration-300 hover:border-graphite-700/60">
+    <ScrollReveal className="glass-panel rounded-xl p-5 space-y-5">
       <SectionHeading
         level="h3"
         title={`Chain of custody & cryptographic ledger (${logs.length} blocks)`}
@@ -112,6 +113,6 @@ export const AuditTimeline: React.FC<AuditTimelineProps> = ({ logs }) => {
           );
         })}
       </div>
-    </div>
+    </ScrollReveal>
   );
 };

@@ -20,7 +20,7 @@ export const Tabs: React.FC<TabsProps> = ({ tabs, defaultTabId, children }) => {
     <div className="space-y-4">
       <div
         role="tablist"
-        className="flex items-center gap-1 bg-graphite-950/80 p-1.5 rounded-xl border border-graphite-800/80 text-xs overflow-x-auto backdrop-blur"
+        className="glass-panel flex items-center gap-1 p-1.5 rounded-xl text-xs overflow-x-auto"
       >
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;

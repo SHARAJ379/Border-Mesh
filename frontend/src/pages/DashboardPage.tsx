@@ -4,6 +4,8 @@ import { api } from '../services/api';
 import { RiskBadge } from '../components/RiskBadge';
 import { ScrollShadowX } from '../components/ScrollShadowX';
 import { SectionHeading } from '../components/SectionHeading';
+import { ScrollReveal } from '../components/ScrollReveal';
+import { DashboardHeroBackground } from '../three/DashboardHeroBackground';
 import {
   FileCheck2,
   AlertTriangle,
@@ -24,8 +26,7 @@ import {
   Bar,
   XAxis,
   YAxis,
-  Tooltip,
-  Legend
+  Tooltip
 } from 'recharts';
 
 interface DashboardPageProps {
@@ -121,27 +122,38 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
   return (
     <div className="space-y-7">
-      <SectionHeading
-        title="Border screening operations"
-        description="Real-time AI identity verification and travel document integrity stream."
-        action={
-          <button
-            onClick={onNavigateNewScreening}
-            className="bg-brass-600 hover:bg-brass-500 active:bg-brass-700 text-white px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 shadow-md shadow-brass-950/40 flex items-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brass-500/50"
-          >
-            <span>+ New document screening</span>
-          </button>
-        }
-      />
+      {/* Hero banner -- the one spot in this app that gets its own dedicated
+          WebGL layer (ThreeUI's interactive dot-grid, hue-rotated to the
+          brass accent) on top of a near-opaque backdrop, rather than the
+          app-wide ambient mesh background showing through like everywhere
+          else. Scoped deliberately: see DashboardHeroBackground's own
+          comment on why this doesn't run app-wide. */}
+      <div className="relative overflow-hidden rounded-2xl border border-graphite-800/60 bg-graphite-950/95">
+        <DashboardHeroBackground />
+        <div className="relative p-6 sm:p-8">
+          <SectionHeading
+            title="Border screening operations"
+            description="Real-time AI identity verification and travel document integrity stream."
+            action={
+              <button
+                onClick={onNavigateNewScreening}
+                className="bg-brass-600 hover:bg-brass-500 active:bg-brass-700 text-white px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 shadow-md shadow-brass-950/40 flex items-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brass-500/50"
+              >
+                <span>+ New document screening</span>
+              </button>
+            }
+          />
+        </div>
+      </div>
 
-      {/* KPI strip -- elevated cards with subtle depth */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+      {/* KPI strip -- elevated glass cards with subtle depth */}
+      <ScrollReveal className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         {kpis.map((kpi) => {
           const Icon = kpi.icon;
           return (
             <div
               key={kpi.label}
-              className="relative rounded-xl bg-graphite-900/90 border border-graphite-800/80 p-5 backdrop-blur transition-all duration-300 hover:border-graphite-700/60 hover:shadow-lg hover:shadow-brass-950/20"
+              className="glass-panel relative rounded-xl p-5"
             >
               <div className="flex items-start justify-between mb-3">
                 <span className="text-[11px] font-medium text-graphite-500 uppercase tracking-wider">{kpi.label}</span>
@@ -162,7 +174,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             </div>
           );
         })}
-      </div>
+      </ScrollReveal>
 
       <button
         onClick={onNavigateQueue}
@@ -173,66 +185,72 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       </button>
 
       {/* Charts -- unequal widths: the actionable list is primary */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-5 bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-5 backdrop-blur transition-all duration-300 hover:border-graphite-700/60">
+      <ScrollReveal className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="glass-panel lg:col-span-5 rounded-xl p-5">
           <SectionHeading level="h3" title="Risk level distribution" description={`${stats.documents_screened} total specimens`} />
 
-          <div className="h-64 relative mt-3">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={56}
-                  outerRadius={82}
-                  paddingAngle={3}
-                  dataKey="value"
-                  label={({ name, percent }) => percent && percent > 0.05 ? `${name} ${(percent * 100).toFixed(0)}%` : ''}
-                  labelLine={false}
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-<Tooltip
-                  contentStyle={{
-                    backgroundColor: '#17171A',
-                    borderColor: '#3D3933',
-                    borderRadius: '10px',
-                    fontSize: '12px',
-                    padding: '8px 12px',
-                    boxShadow: '0 4px 24px rgba(0,0,0,0.4)'
-                  }}
-                  itemStyle={{ color: '#EBE9E5' }}
-                  formatter={(value: any) => String(value ?? '0')}
-                />
-                <Legend
-                  layout="vertical"
-                  align="right"
-                  verticalAlign="middle"
-                  iconType="circle"
-                  iconSize={8}
-                  formatter={(val, entry: any) => (
-                    <span className="text-xs text-graphite-300 flex items-center gap-2 min-w-[120px]">
-                      <span className="w-6">{val}</span>
-                      <span className="font-medium text-graphite-200">{entry.payload.value}</span>
-                    </span>
-                  )}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            {/* Centered in the donut hole */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="flex flex-col items-center leading-tight text-center">
-                <span className="text-4xl font-bold text-graphite-100 tracking-tight">{stats.documents_screened.toLocaleString()}</span>
-                <span className="text-[10px] uppercase text-graphite-500 tracking-wider mt-1">Total Specimens</span>
+          {/* The donut and its legend are two separate flex children, each
+              sized to its own box -- not Recharts' built-in <Legend>, which
+              shares the Pie's plotting width and shifts cx="50%" off-center
+              from the "total specimens" overlay (which centers over the
+              whole row). Keeping them apart means both actually agree on
+              where "center" is. */}
+          <div className="flex items-center gap-2 mt-3">
+            <div className="relative flex-1 h-64 min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={56}
+                    outerRadius={82}
+                    paddingAngle={3}
+                    dataKey="value"
+                    label={({ name, percent }) => percent && percent > 0.05 ? `${name} ${(percent * 100).toFixed(0)}%` : ''}
+                    labelLine={false}
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#17171A',
+                      borderColor: '#3D3933',
+                      borderRadius: '10px',
+                      fontSize: '12px',
+                      padding: '8px 12px',
+                      boxShadow: '0 4px 24px rgba(0,0,0,0.4)'
+                    }}
+                    itemStyle={{ color: '#EBE9E5' }}
+                    formatter={(value: any) => String(value ?? '0')}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              {/* Centered in the donut hole */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="flex flex-col items-center leading-tight text-center">
+                  <span className="text-4xl font-bold text-graphite-100 tracking-tight">{stats.documents_screened.toLocaleString()}</span>
+                  <span className="text-[10px] uppercase text-graphite-500 tracking-wider mt-1">Total Specimens</span>
+                </div>
               </div>
+            </div>
+
+            {/* Custom legend, not Recharts' <Legend> -- see note above */}
+            <div className="flex flex-col gap-3 shrink-0">
+              {pieData.map((entry) => (
+                <div key={entry.name} className="flex items-center gap-2 text-xs text-graphite-300 whitespace-nowrap">
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+                  <span>{entry.name}</span>
+                  <span className="font-medium text-graphite-200 ml-2">{entry.value}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
 
-        <div className="lg:col-span-7 bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-5 backdrop-blur transition-all duration-300 hover:border-graphite-700/60">
+        <div className="glass-panel lg:col-span-7 rounded-xl p-5">
           <SectionHeading level="h3" title="Most frequent risk indicators" description="Top detections across all screenings" />
 
           <div className="h-64 mt-3">
@@ -287,10 +305,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             )}
           </div>
         </div>
-      </div>
+      </ScrollReveal>
 
       {/* Live queue -- elevated table card */}
-      <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl overflow-hidden backdrop-blur">
+      <ScrollReveal className="glass-panel rounded-xl overflow-hidden">
         <div className="p-4 border-b border-graphite-800/60 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-lg bg-brass-950/50 border border-brass-500/30">
@@ -363,7 +381,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             </tbody>
           </table>
         </ScrollShadowX>
-      </div>
+      </ScrollReveal>
     </div>
   );
 };

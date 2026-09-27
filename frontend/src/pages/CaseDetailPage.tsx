@@ -11,6 +11,7 @@ import { FaceVerification } from '../components/FaceVerification';
 import { EvidenceList } from '../components/EvidenceList';
 import { AuditTimeline } from '../components/AuditTimeline';
 import { Tabs, TabItem } from '../components/Tabs';
+import { ScrollReveal } from '../components/ScrollReveal';
 import { downloadCaseReportPdf } from '../lib/pdfExport';
 import { buildUploadedDocumentUrl } from '../lib/paths';
 import {
@@ -154,7 +155,7 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({ caseId, onBack }
           <button
             onClick={handleDownloadPdf}
             disabled={exportingPdf}
-            className="px-3 py-1.5 rounded-lg bg-graphite-900 border border-graphite-800 text-graphite-400 hover:text-graphite-200 hover:border-graphite-700 transition-all text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brass-500/50"
+            className="glass-panel px-3 py-1.5 rounded-lg text-graphite-400 hover:text-graphite-200 text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brass-500/50"
             title="Download a PDF summary of this case"
           >
             {exportingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
@@ -163,7 +164,7 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({ caseId, onBack }
 
           <button
             onClick={fetchCase}
-            className="px-3 py-1.5 rounded-lg bg-graphite-900 border border-graphite-800 text-graphite-400 hover:text-graphite-200 hover:border-graphite-700 transition-all text-xs flex items-center gap-1.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brass-500/50"
+            className="glass-panel px-3 py-1.5 rounded-lg text-graphite-400 hover:text-graphite-200 text-xs flex items-center gap-1.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brass-500/50"
             title="Refresh case data"
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -182,7 +183,7 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({ caseId, onBack }
       {/* Top Intelligence Grid: Risk Score Gauge + Explainable Breakdown --
           sized to content, not an even split: the gauge is a compact
           summary, the breakdown is the detailed data. */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <ScrollReveal className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-4">
           <RiskScore
             score={caseData.risk_score}
@@ -197,9 +198,10 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({ caseId, onBack }
             totalScore={caseData.risk_score}
           />
         </div>
-      </div>
+      </ScrollReveal>
 
       {/* Forensics & Deep-Dive Modules: one at a time via tabs */}
+      <ScrollReveal>
       <Tabs key={caseId} tabs={DETAIL_TABS} defaultTabId="ocr">
         {(activeTabId) => {
           switch (activeTabId) {
@@ -231,6 +233,7 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({ caseId, onBack }
           }
         }}
       </Tabs>
+      </ScrollReveal>
     </div>
   );
 };

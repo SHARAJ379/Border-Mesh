@@ -37,7 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   return (
-    <aside className="w-64 bg-graphite-950 border-r border-graphite-800/80 flex flex-col justify-between shrink-0 select-none">
+    <aside className="w-64 glass-panel-strong border-y-0 border-l-0 flex flex-col justify-between shrink-0 select-none z-20">
       <div>
         {/* Brand Header */}
         <div className="p-5 border-b border-graphite-800/60 flex items-center gap-3">
@@ -89,7 +89,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* System Status Footer */}
-      <div className="p-4 m-3 rounded-xl bg-graphite-900/80 border border-graphite-800/80 space-y-2 text-xs transition-all duration-300 hover:border-graphite-700/60">
+      <div className="glass-panel p-4 m-3 rounded-xl space-y-2 text-xs">
         <div className="flex items-center justify-between text-graphite-300 text-[11px]">
           <span className="flex items-center gap-1.5 text-graphite-400">
             <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />

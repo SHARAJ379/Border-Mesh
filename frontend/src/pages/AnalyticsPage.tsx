@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { DashboardStats } from '../types';
 import { api } from '../services/api';
 import { SectionHeading } from '../components/SectionHeading';
+import { ScrollReveal } from '../components/ScrollReveal';
 import { BarChart3, Activity, ShieldCheck, Zap, AlertTriangle } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -118,11 +119,11 @@ export const AnalyticsPage: React.FC = () => {
       />
 
       {/* KPI strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <ScrollReveal className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {kpis.map((kpi) => {
           const Icon = kpi.icon;
           return (
-            <div key={kpi.label} className="rounded-xl bg-graphite-900/90 border border-graphite-800/80 p-5 backdrop-blur transition-all duration-300 hover:border-graphite-700/60 hover:shadow-lg hover:shadow-brass-950/20">
+            <div key={kpi.label} className="glass-panel rounded-xl p-5">
               <div className="flex items-start justify-between mb-3">
                 <span className="text-[11px] font-medium text-graphite-500 uppercase tracking-wider">{kpi.label}</span>
                 <div className="p-1.5 rounded-lg bg-graphite-950/60 border border-graphite-800/50">
@@ -138,12 +139,12 @@ export const AnalyticsPage: React.FC = () => {
             </div>
           );
         })}
-      </div>
+      </ScrollReveal>
 
       {/* Latency by Module & Document Breakdown -- asymmetric: latency has
           more rows, so it gets more room. */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-7 bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-5 backdrop-blur transition-all duration-300 hover:border-graphite-700/60">
+      <ScrollReveal className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="glass-panel lg:col-span-7 rounded-xl p-5">
           <SectionHeading level="h3" title="Component processing latency" description="Milliseconds per pipeline module" />
           <div className="h-64 mt-3">
             <ResponsiveContainer width="100%" height="100%">
@@ -197,7 +198,7 @@ export const AnalyticsPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="lg:col-span-5 bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-5 backdrop-blur transition-all duration-300 hover:border-graphite-700/60">
+        <div className="glass-panel lg:col-span-5 rounded-xl p-5">
           <SectionHeading level="h3" title="Document types screened" />
           <div className="h-64 mt-3">
             <ResponsiveContainer width="100%" height="100%">
@@ -239,7 +240,7 @@ export const AnalyticsPage: React.FC = () => {
             </ResponsiveContainer>
           </div>
         </div>
-      </div>
+      </ScrollReveal>
     </div>
   );
 };

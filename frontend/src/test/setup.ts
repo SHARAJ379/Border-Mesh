@@ -10,3 +10,21 @@ class ResizeObserverStub {
   disconnect() {}
 }
 globalThis.ResizeObserver = ResizeObserverStub;
+
+// jsdom has no matchMedia -- GSAP's ScrollTrigger plugin (registered at
+// module load by ScrollReveal, used throughout the dashboard for
+// scroll-linked reveals) calls window.matchMedia internally when it
+// registers, which otherwise throws "matchMedia is not a function" in
+// every test that renders a page using ScrollReveal.
+window.matchMedia = window.matchMedia || function (query: string) {
+  return {
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  } as unknown as MediaQueryList;
+};

@@ -30,11 +30,13 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onScenarioLoaded }) 
     analytics: 'Analytics & Model Telemetry',
     audit: 'Chain of Custody Audit Trail',
     settings: 'System Policy & Subsystem Settings',
+    change_detection: 'Same-Identity Change Detection',
+    compliance: 'DPDP Act 2023 Compliance Dashboard',
     detail: 'Officer Case Inspection'
   };
 
   return (
-    <header className="bg-graphite-950 border-b border-graphite-800/80 sticky top-0 z-40">
+    <header className="glass-panel-strong border-x-0 border-t-0 sticky top-0 z-40">
       {/* 1-Click Judging Demo Scenario Bar */}
       <QuickDemoBar onScenarioLoaded={onScenarioLoaded} />
 

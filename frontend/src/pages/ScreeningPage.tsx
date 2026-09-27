@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { api } from '../services/api';
 import { ProcessingPipeline, PipelineStage } from '../components/ProcessingPipeline';
 import { SectionHeading } from '../components/SectionHeading';
+import { ScrollReveal } from '../components/ScrollReveal';
 import { validateImageFile } from '../utils/fileValidation';
 import {
   UploadCloud,
@@ -321,9 +322,9 @@ export const ScreeningPage: React.FC<ScreeningPageProps> = ({ onScreeningComplet
       </div>
 
       {/* Two primary inputs, side by side */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <ScrollReveal className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Document Upload Area */}
-        <div className="p-5 rounded-xl bg-graphite-900/90 border border-graphite-800/80 space-y-4 transition-all duration-300 hover:border-graphite-700/60">
+        <div className="glass-panel p-5 rounded-xl space-y-4">
           <SectionHeading level="h3" title="Document specimen" icon={<FileText className="w-4 h-4 text-brass-400" />} />
 
           <input
@@ -397,6 +398,7 @@ export const ScreeningPage: React.FC<ScreeningPageProps> = ({ onScreeningComplet
                 <option value="Passport">Passport (TD3)</option>
                 <option value="National ID">National ID (TD1)</option>
                 <option value="Visa">Travel Visa</option>
+                <option value="Permit">Permit (Residence/Work/Entry/Transit)</option>
               </select>
             </div>
 
@@ -420,7 +422,7 @@ export const ScreeningPage: React.FC<ScreeningPageProps> = ({ onScreeningComplet
         </div>
 
         {/* Live Face Capture: Webcam in browser or File upload */}
-        <div className="p-5 rounded-xl bg-graphite-900/90 border border-graphite-800/80 space-y-4 transition-all duration-300 hover:border-graphite-700/60">
+        <div className="glass-panel p-5 rounded-xl space-y-4">
           <SectionHeading
             level="h3"
             title="Live traveler face capture"
@@ -525,7 +527,7 @@ export const ScreeningPage: React.FC<ScreeningPageProps> = ({ onScreeningComplet
             </div>
           )}
         </div>
-      </div>
+      </ScrollReveal>
 
       {pipelineError && (
         <div className="flex items-start gap-2 px-4 py-3 rounded-xl bg-rose-950/40 border border-rose-800/60 text-rose-300 text-sm animate-fade-in">
@@ -548,12 +550,12 @@ export const ScreeningPage: React.FC<ScreeningPageProps> = ({ onScreeningComplet
       </button>
 
       {/* Pipeline progress -- full width so the left-to-right flow has room */}
-      <div className="p-5 rounded-xl bg-graphite-900/90 border border-graphite-800/80 transition-all duration-300 hover:border-graphite-700/60">
+      <ScrollReveal className="glass-panel p-5 rounded-xl">
         <ProcessingPipeline
           stages={stages}
           title={isProcessing ? 'Active screening in-flight' : 'Screening pipeline'}
         />
-      </div>
+      </ScrollReveal>
     </div>
   );
 };

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Settings, Sliders, Check, Loader2, AlertTriangle } from 'lucide-react';
 import { api } from '../services/api';
 import { SectionHeading } from '../components/SectionHeading';
+import { ScrollReveal } from '../components/ScrollReveal';
 
 export const SettingsPage: React.FC = () => {
   const [weights, setWeights] = useState({
@@ -88,7 +89,7 @@ export const SettingsPage: React.FC = () => {
     { name: 'MRZ parser & checksums', value: 'ICAO 9303 (active)' },
     { name: 'Tamper AI model', value: 'PyTorch CNN + ELA (active)' },
     { name: 'Face verification', value: 'Cosine embedding net (active)' },
-    { name: 'Watchlist provider', value: 'MockWatchlistProvider (simulated sandbox)', accent: true },
+    { name: 'Watchlist provider', value: 'DatabaseWatchlistProvider (DB-backed, simulated sandbox data)', accent: true },
   ];
 
   const weightFields = [
@@ -109,7 +110,7 @@ export const SettingsPage: React.FC = () => {
 
       <form onSubmit={handleSave} className="space-y-6">
         {/* Risk Engine Weights -- the one real interactive control, keeps a card */}
-        <div className="p-5 rounded-xl bg-graphite-900/80 border border-graphite-800/80 backdrop-blur space-y-5 transition-all duration-300 hover:border-graphite-700/60">
+        <ScrollReveal className="glass-panel rounded-xl p-5 space-y-5">
           <SectionHeading
             level="h3"
             title="Risk engine factor weights"
@@ -161,34 +162,34 @@ export const SettingsPage: React.FC = () => {
               />
             </div>
           </div>
-        </div>
+        </ScrollReveal>
 
         {/* Risk tier cutoffs -- read-only reference data, a plain row not a card */}
-        <div className="animate-fade-in">
+        <ScrollReveal>
           <h3 className="text-sm font-semibold text-graphite-200 mb-3">Risk tier classification cutoffs</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-            <div className="p-3 rounded-lg bg-graphite-900/60 border border-graphite-800/60">
+            <div className="glass-panel p-3 rounded-lg">
               <span className="text-emerald-400 font-semibold block mb-1">Low risk</span>
               <span className="text-graphite-500 block mb-1">0–{thresholds.low}</span>
               <span className="text-graphite-500">Clear for entry</span>
             </div>
-            <div className="p-3 rounded-lg bg-graphite-900/60 border border-graphite-800/60">
+            <div className="glass-panel p-3 rounded-lg">
               <span className="text-amber-400 font-semibold block mb-1">Medium risk</span>
               <span className="text-graphite-500 block mb-1">{thresholds.low + 1}–{thresholds.medium}</span>
               <span className="text-graphite-500">Routine confirmation</span>
             </div>
-            <div className="p-3 rounded-lg bg-graphite-900/60 border border-graphite-800/60">
+            <div className="glass-panel p-3 rounded-lg">
               <span className="text-rose-400 font-semibold block mb-1">High & critical</span>
               <span className="text-graphite-500 block mb-1">{thresholds.medium + 1}–100</span>
               <span className="text-graphite-500">Secondary inspection / detain</span>
             </div>
           </div>
-        </div>
+        </ScrollReveal>
 
         {/* Connected subsystems -- plain label/value list, not a grid of boxes */}
-        <div className="animate-fade-in">
+        <ScrollReveal>
           <h3 className="text-sm font-semibold text-graphite-200 mb-3">Connected subsystem modules</h3>
-          <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl overflow-hidden transition-all duration-300 hover:border-graphite-700/60">
+          <div className="glass-panel rounded-xl overflow-hidden">
             {subsystems.map((sub) => (
               <div key={sub.name} className="flex items-center justify-between py-2.5 px-4 text-xs border-b border-graphite-800/40 last:border-0">
                 <span className="text-graphite-300">{sub.name}</span>
@@ -198,7 +199,7 @@ export const SettingsPage: React.FC = () => {
               </div>
             ))}
           </div>
-        </div>
+        </ScrollReveal>
 
         {/* Save Button */}
         <div className="flex items-center justify-end gap-3">

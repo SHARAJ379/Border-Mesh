@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { OCRResult } from '../types';
 import { FileText, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
 import { SectionHeading } from './SectionHeading';
+import { ScrollReveal } from './ScrollReveal';
 
 // Per UIDAI convention (and this app's own DPDP-dashboard-documented
 // identifier-hashing control): mask a displayed Aadhaar number to only its
@@ -31,7 +32,7 @@ export const OCRResults: React.FC<OCRResultsProps> = ({ data }) => {
 
   if (!data) {
     return (
-      <div className="p-5 rounded-xl bg-graphite-900/60 border border-graphite-800/80 text-center text-xs text-graphite-500">
+      <div className="glass-panel rounded-xl p-5 text-center text-xs text-graphite-500">
         No OCR extraction data recorded.
       </div>
     );
@@ -62,7 +63,7 @@ export const OCRResults: React.FC<OCRResultsProps> = ({ data }) => {
   const confPercent = Math.round(data.confidence * 100);
 
   return (
-    <div className="bg-graphite-900/80 border border-graphite-800/80 rounded-xl p-5 backdrop-blur space-y-5 transition-all duration-300 hover:border-graphite-700/60">
+    <ScrollReveal className="glass-panel rounded-xl p-5 space-y-5">
       <SectionHeading
         level="h3"
         title="OCR extraction"
@@ -124,6 +125,6 @@ export const OCRResults: React.FC<OCRResultsProps> = ({ data }) => {
           </div>
         )}
       </div>
-    </div>
+    </ScrollReveal>
   );
 };
