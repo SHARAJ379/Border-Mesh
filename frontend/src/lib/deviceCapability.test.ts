@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasWebGL, isLowEndDevice } from './deviceCapability';
+import { hasWebGL, isLowEndDevice, isCoarsePointer } from './deviceCapability';
 
 describe('hasWebGL', () => {
   it('returns false in jsdom, which has no real WebGL implementation', () => {
@@ -11,6 +11,16 @@ describe('hasWebGL', () => {
     // see the DashboardPage test suite, which surfaced this once
     // DashboardHeroBackground started rendering unconditionally.
     expect(hasWebGL()).toBe(false);
+  });
+});
+
+describe('isCoarsePointer', () => {
+  it('is false in jsdom, which reports no matchMedia matches by default', () => {
+    // test/setup.ts stubs window.matchMedia to always report matches:false
+    // (see its own comment) -- this pins down that isCoarsePointer reads
+    // the '(pointer: coarse)' feature specifically, not some other query,
+    // by confirming it agrees with that default.
+    expect(isCoarsePointer()).toBe(false);
   });
 });
 

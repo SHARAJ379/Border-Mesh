@@ -36,6 +36,19 @@ export function hasWebGL(): boolean {
   return cachedHasWebGL;
 }
 
+// Touch/stylus input has no hover state and no cursor to drag a
+// fine-grained UI affordance (a magnifier, a precise drag handle) with --
+// the same "no cursor to work with" reasoning as the sketchbook-style
+// loupe pattern this backs (see Magnifier.tsx), generalized to a shared
+// device-capability check rather than a one-off matchMedia call inline in
+// that component. `(pointer: coarse)` is the standard media-feature for
+// "the primary input can't hover/point precisely" (touchscreens); mouse,
+// trackpad, and stylus-with-hover all report `fine`.
+export function isCoarsePointer(): boolean {
+  return typeof window !== 'undefined' &&
+    window.matchMedia?.('(pointer: coarse)').matches === true;
+}
+
 export function isLowEndDevice(): boolean {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return true;
   if (!hasWebGL()) return true;

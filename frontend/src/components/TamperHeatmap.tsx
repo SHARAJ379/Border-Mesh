@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { TamperResult } from '../types';
-import { Layers, Eye, Flame, AlertOctagon, ScanSearch, CheckCircle2 } from 'lucide-react';
+import { Layers, Eye, Flame, AlertOctagon, ScanSearch, CheckCircle2, ZoomIn } from 'lucide-react';
 import { RiskBadge } from './RiskBadge';
 import { SectionHeading } from './SectionHeading';
 import { ScrollReveal } from './ScrollReveal';
+import { Magnifier } from './Magnifier';
 
 interface TamperHeatmapProps {
   originalImageUrl?: string;
@@ -54,8 +55,11 @@ export const TamperHeatmap: React.FC<TamperHeatmapProps> = ({
 
       {/* View Toggle Tabs */}
       <div className="flex items-center justify-between border-b border-graphite-800/60 pb-3">
-        <span className="text-[11px] text-graphite-400">
+        <span className="text-[11px] text-graphite-400 flex items-center gap-1.5">
           Forensic Visualizer Mode:
+          <span className="hidden sm:flex items-center gap-1 text-graphite-500">
+            <ZoomIn className="w-3 h-3" /> hover the image to magnify
+          </span>
         </span>
         <div className="flex items-center gap-1 bg-graphite-950/60 p-1 rounded-lg border border-graphite-800/80 text-xs">
           {viewTabs.map((tab) => {
@@ -90,7 +94,7 @@ export const TamperHeatmap: React.FC<TamperHeatmapProps> = ({
               </span>
               <div className="relative rounded-lg overflow-hidden bg-black/40 border border-graphite-800/60 aspect-[3/4] sm:aspect-[4/5] flex items-center justify-center">
                 {originalImageUrl ? (
-                  <img src={originalImageUrl} alt="Original Document" className="w-full h-full object-contain" />
+                  <Magnifier src={originalImageUrl} alt="Original Document" className="w-full h-full object-contain" />
                 ) : (
                   <span className="text-xs text-graphite-500">No Image</span>
                 )}
@@ -102,7 +106,7 @@ export const TamperHeatmap: React.FC<TamperHeatmapProps> = ({
               </span>
               <div className="relative rounded-lg overflow-hidden bg-black/40 border border-graphite-800/60 aspect-[3/4] sm:aspect-[4/5] flex items-center justify-center">
                 {tamperResult.heatmap_url ? (
-                  <img src={tamperResult.heatmap_url} alt="ELA Heatmap" className="w-full h-full object-contain" />
+                  <Magnifier src={tamperResult.heatmap_url} alt="ELA Heatmap" className="w-full h-full object-contain" />
                 ) : (
                   <span className="text-xs text-graphite-500">Heatmap Processing</span>
                 )}
@@ -111,11 +115,18 @@ export const TamperHeatmap: React.FC<TamperHeatmapProps> = ({
           </div>
         ) : (
           <div className="relative rounded-lg overflow-hidden bg-black/40 border border-graphite-800/60 min-h-[420px] max-h-[70vh] flex items-center justify-center">
-            <img
-              src={viewMode === 'original' ? originalImageUrl : tamperResult.heatmap_url || originalImageUrl}
-              alt="Document Forensic View"
-              className="max-h-[70vh] w-auto object-contain"
-            />
+            {(() => {
+              const activeSrc = viewMode === 'original' ? originalImageUrl : tamperResult.heatmap_url || originalImageUrl;
+              return activeSrc ? (
+                <Magnifier
+                  src={activeSrc}
+                  alt="Document Forensic View"
+                  className="max-h-[70vh] w-auto object-contain"
+                />
+              ) : (
+                <span className="text-xs text-graphite-500">No Image</span>
+              );
+            })()}
           </div>
         )}
       </div>
