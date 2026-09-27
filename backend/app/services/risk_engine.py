@@ -2,6 +2,7 @@ from datetime import date
 from typing import Dict, Any, List, Optional, Tuple
 from app.core.config import settings
 from app.services.rules_engine import DocumentRulesEngine
+from app.services.risk_types import RiskCheckStatus, RiskFactorKey, make_check, make_evidence
 
 # Heuristic used to discount face-match confidence when the document photo
 # was very likely taken long enough ago (or the holder was a minor when it
@@ -88,7 +89,9 @@ class RiskEngine:
     """
     Central Risk Intelligence Layer.
     Aggregates multi-factor forensic signals into an explainable 0-100 risk score.
-    Outputs factor breakdown, individual risk signals, risk tier, and human-in-the-loop recommendations.
+    Outputs factor breakdown, an itemized list of every risk CHECK run (pass,
+    fail, or non-blocking note -- see app.services.risk_types), risk tier,
+    and human-in-the-loop recommendations.
     """
 
     def __init__(self, policy=None):
@@ -114,58 +117,53 @@ class RiskEngine:
         tamper_data: Dict[str, Any],
         face_data: Optional[Dict[str, Any]],
         watchlist_match: Optional[Dict[str, Any]],
-        duplicate_identity_match: Optional[Dict[str, Any]] = None
+        duplicate_identity_match: Optional[Dict[str, Any]] = None,
+        duplicate_identity_checked: bool = False,
     ) -> Dict[str, Any]:
-        all_signals: List[Dict[str, Any]] = []
+        all_checks: List[Dict[str, Any]] = []
 
-        # --- 1. MRZ & Validation Factor (25%) ---
-        mrz_raw_risk = 0.0
-        mrz_signals_list = []
-        if validation_data and validation_data.get("signals"):
-            for sig in validation_data["signals"]:
-                all_signals.append(sig)
-                mrz_signals_list.append(sig["signal"])
-                mrz_raw_risk += sig.get("score_impact", 15.0)
+        # --- 1. MRZ & Document Validation Factor (25%) + Consistency (10%) ---
+        #
+        # Both factors are fed by the SAME rules_engine.evaluate() output,
+        # but each check contributes to exactly ONE of them, chosen by its
+        # own `factor` tag -- rules_engine tags the visual-vs-MRZ document-
+        # number crosscheck as CONSISTENCY (a genuine cross-source
+        # agreement check) and every other rule (checksums, expiration,
+        # format, presence) as MRZ_VALIDATION. This replaces a previous bug
+        # where the SAME failed rule counted twice: once via its own
+        # score_impact summed into MRZ_VALIDATION, and AGAIN via a blunt
+        # `failed_count * 30` formula that re-penalized every validation
+        # failure a second time under Consistency, regardless of whether it
+        # was actually a cross-source inconsistency. A failed check must
+        # only ever move the score once.
+        validation_checks = validation_data.get("checks", []) if validation_data else []
+        all_checks.extend(validation_checks)
 
-        mrz_raw_risk = min(100.0, mrz_raw_risk)
+        mrz_checks = [c for c in validation_checks if c.get("factor") == RiskFactorKey.MRZ_VALIDATION]
+        consistency_checks = [c for c in validation_checks if c.get("factor") == RiskFactorKey.CONSISTENCY]
+
+        mrz_raw_risk = min(100.0, sum(c["score_impact"] for c in mrz_checks))
         mrz_contrib = round(mrz_raw_risk * self.w_mrz, 1)
 
-        # --- 2. Tamper Analysis Factor (30%) ---
-        tamper_raw_risk = 0.0
-        tamper_signals_list = []
-        if tamper_data:
-            tamper_score = tamper_data.get("tamper_risk", 0.1) * 100.0
-            tamper_raw_risk = min(100.0, tamper_score)
-            # Tie signal severity to the tamper service's own document-level
-            # verdict (already calibrated: tamper_risk >= 0.85 -> CRITICAL) so a
-            # highly-confident forgery finding can trigger the same hard-stop
-            # floor as an expired document or watchlist hit, rather than being
-            # capped at HIGH and diluted by unrelated clean signals.
-            tamper_overall_level = tamper_data.get("risk_level", "LOW")
-            for sig in tamper_data.get("signals", []):
-                confidence = sig.get("confidence", 0.8)
-                if tamper_overall_level == "CRITICAL":
-                    severity = "CRITICAL"
-                elif confidence > 0.85:
-                    severity = "HIGH"
-                else:
-                    severity = "MEDIUM"
-                signal_entry = {
-                    "module": "TAMPER",
-                    "signal": f"Forensic Anomaly ({sig['type'].replace('_', ' ').title()})",
-                    "severity": severity,
-                    "confidence": confidence,
-                    "explanation": sig.get("explanation", "Potential image texture or compression anomaly detected."),
-                    "score_impact": round(confidence * 18.0, 1)
-                }
-                all_signals.append(signal_entry)
-                tamper_signals_list.append(signal_entry["signal"])
+        consistency_raw_risk = min(100.0, sum(c["score_impact"] for c in consistency_checks))
+        consistency_contrib = round(consistency_raw_risk * self.w_consistency, 1)
 
+        # --- 2. Tamper Analysis Factor (30%) ---
+        #
+        # tamper_service.py now builds its own fully-shaped checks (severity
+        # escalation against the document-level CRITICAL verdict already
+        # applied there) -- risk_engine just aggregates them. raw_risk keeps
+        # its own bespoke, already-calibrated formula (ELA + trained-CNN
+        # probability + heuristic signals, see TamperDetectionService.
+        # _aggregate_tamper_score) rather than summing check score_impacts:
+        # those remain a display/evidence-list number, same as before.
+        tamper_checks = tamper_data.get("checks", []) if tamper_data else []
+        all_checks.extend(tamper_checks)
+        tamper_raw_risk = min(100.0, (tamper_data.get("tamper_risk", 0.1) if tamper_data else 0.1) * 100.0)
         tamper_contrib = round(tamper_raw_risk * self.w_tamper, 1)
 
         # --- 3. Face Verification Factor (30%) ---
         face_raw_risk = 0.0
-        face_signals_list = []
         face_weight = self.w_face
         if face_data:
             similarity = face_data.get("similarity", 1.0)
@@ -178,9 +176,7 @@ class RiskEngine:
             elif status in ["NO_FACE_DETECTED", "MULTIPLE_FACES"]:
                 face_raw_risk = 85.0
 
-            for sig in face_data.get("signals", []):
-                all_signals.append(sig)
-                face_signals_list.append(sig["signal"])
+            all_checks.extend(face_data.get("checks", []))
 
             # Discount the face module's weight when the MRZ DOB (combined
             # with expiry, since issue date isn't machine-readable) implies
@@ -205,12 +201,11 @@ class RiskEngine:
                 if tier:
                     face_weight = round(self.w_face * discount, 4)
                     minor_note = " (holder was a minor when the document was likely issued)" if age_gap["was_minor_at_issue"] else ""
-                    all_signals.append({
-                        "module": "FACE",
-                        "signal": f"Age-Gap-Adjusted Face Confidence ({tier})",
-                        "severity": "LOW",
-                        "confidence": 0.7,
-                        "explanation": (
+                    all_checks.append(make_check(
+                        id=f"FACE_AGE_GAP_DISCOUNT_{tier}", category="FACE", factor=RiskFactorKey.FACE,
+                        label=f"Age-Gap-Adjusted Face Confidence ({tier})", status=RiskCheckStatus.INFO,
+                        confidence=0.7,
+                        explanation=(
                             f"Face similarity lower-confidence due to an estimated "
                             f"{age_gap['photo_age_years']:.0f}-year gap since likely document "
                             f"photo capture{minor_note}. Face verification's weight in the "
@@ -220,8 +215,11 @@ class RiskEngine:
                             f"issue date is not authoritative -- derived from MRZ expiry minus "
                             f"standard ICAO validity, since issue date isn't MRZ-readable."
                         ),
-                        "score_impact": 0.0
-                    })
+                        evidence=make_evidence(
+                            measured_value=age_gap["photo_age_years"], threshold_value=AGE_GAP_MODERATE_YEARS,
+                            unit="estimated_photo_age_years",
+                        ),
+                    ))
         else:
             # Face verification pending or not performed yet
             face_raw_risk = 15.0
@@ -229,33 +227,30 @@ class RiskEngine:
         face_raw_risk = min(100.0, face_raw_risk)
         face_contrib = round(face_raw_risk * face_weight, 1)
 
-        # --- 4. Consistency Checks (10%) ---
-        consistency_raw_risk = 0.0
-        consistency_signals_list = []
-        if validation_data.get("failed_count", 0) > 0:
-            consistency_raw_risk = min(100.0, validation_data["failed_count"] * 30.0)
-            consistency_signals_list.append(f"{validation_data['failed_count']} Rule Discrepancies")
-        consistency_contrib = round(consistency_raw_risk * self.w_consistency, 1)
-
-        # --- 5. Watchlist Demo Signal (5%) ---
+        # --- 4. Simulated Watchlist Adapter (5%) ---
         watchlist_raw_risk = 0.0
-        watchlist_signals_list = []
         if watchlist_match:
             watchlist_raw_risk = 100.0
             entry = watchlist_match["entry"]
-            signal_entry = {
-                "module": "WATCHLIST",
-                "signal": f"Demo Watchlist Hit: {entry['category']}",
-                "severity": entry.get("severity", "CRITICAL"),
-                "confidence": 0.99,
-                "explanation": f"[SIMULATED DATA] {watchlist_match['explanation']} Requires officer identity review.",
-                "score_impact": 25.0
-            }
-            all_signals.append(signal_entry)
-            watchlist_signals_list.append(signal_entry["signal"])
+            match_evidence = watchlist_match.get("match_evidence")
+            all_checks.append(make_check(
+                id="WATCHLIST_SCREENING", category="WATCHLIST", factor=RiskFactorKey.WATCHLIST,
+                label=f"Demo Watchlist Hit: {entry['category']}", status=RiskCheckStatus.FAIL,
+                severity=entry.get("severity", "CRITICAL"), confidence=0.99,
+                explanation=f"[SIMULATED DATA] {watchlist_match['explanation']} Requires officer identity review.",
+                evidence=make_evidence(match=match_evidence) if match_evidence else None,
+                score_impact=25.0,
+            ))
+        else:
+            all_checks.append(make_check(
+                id="WATCHLIST_SCREENING", category="WATCHLIST", factor=RiskFactorKey.WATCHLIST,
+                label="Watchlist Screening", status=RiskCheckStatus.PASS, confidence=0.9,
+                explanation="No match found against active simulated watchlist records "
+                            "(document number or full name).",
+            ))
         watchlist_contrib = round(watchlist_raw_risk * self.w_watchlist, 1)
 
-        # --- 6. Cross-Case Duplicate Identity Check (HIGH signal, flat unweighted add) ---
+        # --- 5. Cross-Case Duplicate Identity Check (HIGH signal, flat unweighted add) ---
         #
         # A gallery hit (see identity_gallery_service.py) means this
         # screening's live face is the CLOSEST match (at or above
@@ -269,28 +264,18 @@ class RiskEngine:
         # false-accept rate was 26.0% -- roughly 1 in 4 genuinely innocent
         # travelers, at this gallery size, would score a "match" against
         # SOME other unrelated person purely from gallery-size compounding.
-        # No threshold tested got false-accepts low without also gutting
-        # recall on genuine duplicates (0.90 -> 0.2% FAR but only 43% of
-        # genuine duplicates caught). A signal with a 1-in-4 false-positive
-        # rate at usable recall does not belong in the automatic
-        # CRITICAL-floors-to-HIGH tier -- so, unlike before, this no longer
-        # participates in that floor at all (severity HIGH, not CRITICAL).
-        # It still needs REAL weight to matter (previously it had none:
-        # "CRITICAL flag only, no weight" relied entirely on the floor for
-        # its whole effect, which would make it silently inert now) -- added
-        # as a flat, unweighted addition to the total rather than a new
-        # weighted factor, for the same "no PolicySettings migration
-        # tooling" reason as before.
+        # So this is HIGH severity, not CRITICAL, added as a flat,
+        # unweighted addition to the total rather than a new weighted
+        # factor (no PolicySettings migration tooling for a 6th weight).
         if duplicate_identity_match:
             matched_case_number = duplicate_identity_match["case_number"]
             similarity = duplicate_identity_match.get("similarity", 0.0)
             duplicate_identity_score_impact = 30.0
-            all_signals.append({
-                "module": "IDENTITY",
-                "signal": f"Possible Duplicate Identity: matches Case {matched_case_number}",
-                "severity": "HIGH",
-                "confidence": round(similarity, 2),
-                "explanation": (
+            all_checks.append(make_check(
+                id="IDENTITY_DUPLICATE_GALLERY_MATCH", category="IDENTITY", factor=RiskFactorKey.IDENTITY,
+                label=f"Possible Duplicate Identity: matches Case {matched_case_number}",
+                status=RiskCheckStatus.FAIL, severity="HIGH", confidence=round(similarity, 2),
+                explanation=(
                     f"This individual's live facial biometric is the closest gallery match to a "
                     f"PREVIOUS screening (Case {matched_case_number}), filed under a different "
                     f"name or document number. Similarity: {round(similarity * 100, 1)}%. "
@@ -298,10 +283,18 @@ class RiskEngine:
                     f"rate at gallery scale (see scripts/evaluate_gallery_scale_far.py) -- treat "
                     f"as a corroborating lead requiring officer identity review, not confirmed fraud."
                 ),
-                "score_impact": duplicate_identity_score_impact
-            })
+                evidence=make_evidence(measured_value=round(similarity, 3), threshold_value=0.80, unit="cosine_similarity"),
+                score_impact=duplicate_identity_score_impact,
+            ))
         else:
             duplicate_identity_score_impact = 0.0
+            if duplicate_identity_checked:
+                all_checks.append(make_check(
+                    id="IDENTITY_DUPLICATE_GALLERY_MATCH", category="IDENTITY", factor=RiskFactorKey.IDENTITY,
+                    label="Cross-Case Duplicate Identity Screening", status=RiskCheckStatus.PASS, confidence=0.9,
+                    explanation="No cross-case duplicate-identity match found among prior screenings' live "
+                                "facial embeddings.",
+                ))
 
         # Total Aggregated Score (0 to 100)
         total_risk = round(
@@ -319,7 +312,7 @@ class RiskEngine:
         # for travel. Floor the score so it can never classify below HIGH when
         # any such signal is present.
         critical_floor_applied = False
-        if any(sig.get("severity") == "CRITICAL" for sig in all_signals) and total_risk <= self.threshold_medium:
+        if any(c.get("severity") == "CRITICAL" for c in all_checks) and total_risk <= self.threshold_medium:
             total_risk = self.threshold_medium + 0.1
             critical_floor_applied = True
 
@@ -343,35 +336,30 @@ class RiskEngine:
                 "weight": self.w_mrz,
                 "raw_risk": round(mrz_raw_risk, 1),
                 "weighted_contribution": mrz_contrib,
-                "top_signals": mrz_signals_list[:2]
             },
             {
                 "factor": "Forensic Tamper AI",
                 "weight": self.w_tamper,
                 "raw_risk": round(tamper_raw_risk, 1),
                 "weighted_contribution": tamper_contrib,
-                "top_signals": tamper_signals_list[:2]
             },
             {
                 "factor": "Biometric Face Verification",
                 "weight": face_weight,
                 "raw_risk": round(face_raw_risk, 1),
                 "weighted_contribution": face_contrib,
-                "top_signals": face_signals_list[:2]
             },
             {
                 "factor": "Data Consistency Crosscheck",
                 "weight": self.w_consistency,
                 "raw_risk": round(consistency_raw_risk, 1),
                 "weighted_contribution": consistency_contrib,
-                "top_signals": consistency_signals_list
             },
             {
                 "factor": "Simulated Watchlist Adapter",
                 "weight": self.w_watchlist,
                 "raw_risk": round(watchlist_raw_risk, 1),
                 "weighted_contribution": watchlist_contrib,
-                "top_signals": watchlist_signals_list
             }
         ]
 
@@ -387,28 +375,17 @@ class RiskEngine:
                 "weight": None,
                 "raw_risk": None,
                 "weighted_contribution": duplicate_identity_score_impact,
-                "top_signals": [s["signal"] for s in all_signals if s.get("module") == "IDENTITY"][:1]
             })
 
         # Makes the hard-stop override (above) visible as its own line, not
         # just an invisible jump between the weighted categories' sum and the
-        # displayed total -- previously a CRITICAL signal with no weighted
-        # factor of its own (duplicate-identity match) could supply most of
-        # the score while the breakdown categories summed to far less than
-        # the total, in a panel literally named "Explainable risk breakdown".
-        # No weight/raw_risk of its own (see RiskFactorBreakdown's schema
-        # comment): this is a flat point adjustment, not a proportional
-        # category. Duplicate-identity no longer reaches this path (HIGH,
-        # not CRITICAL, severity -- see above), so this now only fires for
-        # an expired document, a watchlist hit, or a CRITICAL tamper verdict.
+        # displayed total.
         if critical_floor_applied:
-            critical_signal_names = [s["signal"] for s in all_signals if s.get("severity") == "CRITICAL"]
             breakdown.append({
                 "factor": "Critical Signal Floor",
                 "weight": None,
                 "raw_risk": None,
                 "weighted_contribution": round(total_risk - pre_floor_total, 1),
-                "top_signals": critical_signal_names[:2]
             })
 
         return {
@@ -417,7 +394,7 @@ class RiskEngine:
             "recommendation": recommendation,
             "critical_floor_applied": critical_floor_applied,
             "breakdown": breakdown,
-            "signals": all_signals
+            "checks": all_checks,
         }
 
 def get_risk_engine(policy=None) -> RiskEngine:

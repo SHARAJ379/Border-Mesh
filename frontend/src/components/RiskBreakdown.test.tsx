@@ -8,7 +8,6 @@ const weightedItem: RiskFactorContribution = {
   weight: 0.3,
   raw_risk: 62,
   weighted_contribution: 18.6,
-  top_signals: ['Forensic Anomaly (Exif Metadata Missing)']
 };
 
 const floorItem: RiskFactorContribution = {
@@ -16,7 +15,6 @@ const floorItem: RiskFactorContribution = {
   weight: null,
   raw_risk: null,
   weighted_contribution: 30.5, // 18.6 (weightedItem) + 30.5 = 49.1, matching the totals used below
-  top_signals: ['Possible Duplicate Identity: matches Case BM-2026-F0E17']
 };
 
 describe('RiskBreakdown', () => {
@@ -37,17 +35,22 @@ describe('RiskBreakdown', () => {
     expect(screen.getByText('Raw Risk: 62%')).toBeInTheDocument();
   });
 
-  it('renders the critical-signal-floor row without a weight or raw-risk percentage, and names the triggering signal', () => {
+  it('renders the critical-signal-floor row without a weight or raw-risk percentage', () => {
     // The floor is a flat point adjustment, not a proportional weighted
     // category (see risk_engine.py) -- it must not show a fabricated
     // weight/raw-risk percentage or progress bar, but must still show its
-    // point contribution and which signal triggered it.
+    // point contribution. Which signal triggered it now lives in the Risk
+    // Reasons tab's itemized checks, not duplicated here.
     render(<RiskBreakdown breakdown={[weightedItem, floorItem]} totalScore={49.1} />);
     expect(screen.getByText('Critical Signal Floor')).toBeInTheDocument();
     expect(screen.getByText('+30.5')).toBeInTheDocument();
-    expect(screen.getByText(/Possible Duplicate Identity: matches Case BM-2026-F0E17/)).toBeInTheDocument();
     expect(screen.queryByText('(null% Weight)')).not.toBeInTheDocument();
     expect(screen.queryByText(/Weight\)/, { selector: '*' })).not.toHaveTextContent('null');
+  });
+
+  it('points to the Risk Reasons tab for the itemized checks behind the numbers', () => {
+    render(<RiskBreakdown breakdown={[weightedItem]} totalScore={18.6} />);
+    expect(screen.getByText(/Risk Reasons tab/)).toBeInTheDocument();
   });
 
   it('the displayed factors sum to the displayed total when a critical floor is applied', () => {

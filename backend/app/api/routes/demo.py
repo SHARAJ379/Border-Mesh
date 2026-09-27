@@ -11,7 +11,7 @@ from app.api.deps import get_db
 from app.api.routes.screening import MAX_CASE_NUMBER_ATTEMPTS
 from app.core.config import settings
 from app.core.encryption import encrypt_file_in_place, decrypted_tempfile
-from app.models import Case, DocumentAnalysis, RiskSignal, AuditLog
+from app.models import Case, DocumentAnalysis, RiskCheck, AuditLog
 from app.utils.synthetic_generator import SyntheticDocumentGenerator
 from app.services.ocr_service import get_ocr_service, TesseractOCRService
 from app.services.mrz_service import MRZService
@@ -175,6 +175,22 @@ SCENARIO_CONFIGS = {
         "stay_duration": "260630",  # overridden to a fixed past date by generate_visa's 'expired' mode
         "doc_face_photo": PERSON_A, "live_face_photo": PERSON_A  # same person -> MATCH
     },
+    "permit": {
+        "title": "Residence Permit — Expired",
+        "mode": "expired",
+        "document_type": "PERMIT",
+        "surname": "ADEYEMI",
+        "given_names": "TOLA",
+        "nationality": "ATLANTIAN",
+        "country_name": "REPUBLIC OF UTOPIA",
+        "doc_number": "RP7734210",
+        "dob": "910304",
+        "permit_type": "RESIDENCE PERMIT",
+        "issuing_authority": "REPUBLIC OF UTOPIA IMMIGRATION SERVICE",
+        "issue": "240101",
+        "expiry": "250101",  # overridden to a fixed past date by generate_permit's 'expired' mode
+        "doc_face_photo": PERSON_A, "live_face_photo": PERSON_A  # same person -> MATCH
+    },
     "duplicate_identity": {
         "title": "Duplicate Identity Detection",
         "mode": "genuine",
@@ -244,6 +260,7 @@ DOCUMENT_TYPE_LABELS = {
     "DRIVING_LICENSE": "Driving Licence",
     "VOTER_ID": "Voter ID",
     "VISA": "Travel Visa",
+    "PERMIT": "Permit",
 }
 
 @router.post("/scenario")
@@ -336,6 +353,21 @@ def _execute_scenario(cfg: Dict[str, Any], db: Session, check_duplicate_identity
             entry_validation=cfg["entry_validation"],
             issue_yymmdd=cfg["issue"],
             stay_duration_yymmdd=cfg["stay_duration"],
+            face_photo_path=cfg["doc_face_photo"]
+        )
+    elif doc_type == "PERMIT":
+        SyntheticDocumentGenerator.generate_permit(
+            out_path=doc_path,
+            mode=cfg["mode"],
+            surname=cfg["surname"],
+            given_names=cfg["given_names"],
+            nationality=cfg["nationality"],
+            doc_number=cfg["doc_number"],
+            permit_type=cfg["permit_type"],
+            issuing_authority=cfg["issuing_authority"],
+            dob_yymmdd=cfg["dob"],
+            issue_yymmdd=cfg["issue"],
+            expiry_yymmdd=cfg["expiry"],
             face_photo_path=cfg["doc_face_photo"]
         )
     else:
@@ -466,7 +498,16 @@ def _execute_scenario(cfg: Dict[str, Any], db: Session, check_duplicate_identity
         # Step 6: Watchlist, Duplicate Identity & Risk Engine
         full_name = f"{cfg['surname']} {cfg['given_names']}"
         watchlist_provider = get_watchlist_provider()
-        watchlist_match = watchlist_provider.check_watchlist(full_name, cfg["doc_number"])
+        watchlist_match = watchlist_provider.check_watchlist(db, full_name, cfg["doc_number"])
+        if watchlist_match:
+            AuditService.log(
+                db, "WATCHLIST_HIT", case_uid, actor="AI-WATCHLIST-ADAPTER",
+                metadata={
+                    "watchlist_id": watchlist_match["entry"]["watchlist_id"],
+                    "match_field": watchlist_match["match_field"],
+                    "category": watchlist_match["entry"]["category"],
+                }
+            )
 
         # Cross-Case Duplicate Identity Check -- see screening.py's manual-
         # upload equivalent for the same live_embedding/gallery contract.
@@ -498,7 +539,8 @@ def _execute_scenario(cfg: Dict[str, Any], db: Session, check_duplicate_identity
             tamper_data=tamper_result,
             face_data=face_result,
             watchlist_match=watchlist_match,
-            duplicate_identity_match=duplicate_identity_match
+            duplicate_identity_match=duplicate_identity_match,
+            duplicate_identity_checked=check_duplicate_identity and bool(face_result.get("live_embedding")),
         )
 
         total_processing_ms = (time.perf_counter() - step_start) * 1000.0
@@ -525,18 +567,21 @@ def _execute_scenario(cfg: Dict[str, Any], db: Session, check_duplicate_identity
         )
         db.add(analysis)
 
-        # Save Signals
-        for sig in risk_res["signals"]:
-            risk_sig = RiskSignal(
+        # Save Checks
+        for chk in risk_res["checks"]:
+            db.add(RiskCheck(
                 case_id=case_uid,
-                module=sig["module"],
-                signal=sig["signal"],
-                severity=sig.get("severity", "LOW"),
-                confidence=sig.get("confidence", 0.9),
-                explanation=sig["explanation"],
-                score_impact=sig.get("score_impact", 0.0)
-            )
-            db.add(risk_sig)
+                check_key=chk["id"],
+                category=chk["category"],
+                factor=chk.get("factor"),
+                label=chk["label"],
+                status=chk["status"],
+                severity=chk.get("severity"),
+                confidence=chk.get("confidence", 0.9),
+                explanation=chk["explanation"],
+                evidence=chk.get("evidence"),
+                score_impact=chk.get("score_impact", 0.0),
+            ))
 
         db.commit()
         AuditService.log(db, "RISK_CALCULATED", case_uid, actor="AI-RISK-ENGINE", metadata={"score": new_case.risk_score})

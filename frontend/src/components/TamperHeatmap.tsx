@@ -120,42 +120,80 @@ export const TamperHeatmap: React.FC<TamperHeatmapProps> = ({
         )}
       </div>
 
-      {/* Forensic Signal Breakdown -- secondary to the evidence image above */}
+      {/* Forensic check breakdown -- secondary to the evidence image above.
+          Shows every check that ran, not just failures: a clean scan states
+          WHY it's clean (each region/heuristic's own measured evidence),
+          not silence. */}
       <div>
-        <h4 className="text-[11px] font-medium text-graphite-500 mb-3">
-          Forensic multi-signal indicators ({tamperResult.signals.length} detected)
-        </h4>
+        {(() => {
+          const flagged = tamperResult.checks.filter((c) => c.status === 'FAIL');
+          const clean = tamperResult.checks.filter((c) => c.status !== 'FAIL');
+          return (
+            <>
+              <h4 className="text-[11px] font-medium text-graphite-500 mb-3">
+                Forensic multi-signal indicators ({flagged.length} flagged of {tamperResult.checks.length} checks)
+              </h4>
 
-        {tamperResult.signals.length === 0 ? (
-          <div className="p-3 rounded-lg bg-emerald-950/20 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
-            <CheckCircle2 className="w-3.5 h-3.5" /> No significant image manipulation or recompression anomalies detected.
-          </div>
-        ) : (
-          <div className="space-y-2.5">
-            {tamperResult.signals.map((sig, idx) => (
-              <div
-                key={idx}
-                className="p-3 rounded-lg bg-graphite-950/70 border border-graphite-800/80 text-xs space-y-1.5 transition-colors hover:border-graphite-700/60"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-orange-300 capitalize flex items-center gap-1.5">
-                    <AlertOctagon className="w-3.5 h-3.5 text-orange-400" />
-                    {sig.type.replace(/_/g, ' ')}
-                  </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-orange-950/80 text-orange-300 border border-orange-500/40 font-bold">
-                    Confidence: {Math.round(sig.confidence * 100)}%
-                  </span>
+              {flagged.length === 0 ? (
+                <div className="p-3 rounded-lg bg-emerald-950/20 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> No significant image manipulation or recompression anomalies detected.
                 </div>
-                <p className="text-graphite-400 text-[11px] leading-relaxed">{sig.explanation}</p>
-                {sig.region && sig.region.length === 4 && (
-                  <span className="text-[10px] text-graphite-400 block font-mono">
-                    Region Box: [x:{sig.region[0]}, y:{sig.region[1]}, w:{sig.region[2]}, h:{sig.region[3]}]
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+              ) : (
+                <div className="space-y-2.5">
+                  {flagged.map((c, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 rounded-lg bg-graphite-950/70 border border-graphite-800/80 text-xs space-y-1.5 transition-colors hover:border-graphite-700/60"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-orange-300 flex items-center gap-1.5">
+                          <AlertOctagon className="w-3.5 h-3.5 text-orange-400" />
+                          {c.label}
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-orange-950/80 text-orange-300 border border-orange-500/40 font-bold">
+                          Confidence: {Math.round(c.confidence * 100)}%
+                        </span>
+                      </div>
+                      <p className="text-graphite-400 text-[11px] leading-relaxed">{c.explanation}</p>
+                      {c.evidence?.measured_value !== null && c.evidence?.measured_value !== undefined && (
+                        <span className="text-[10px] text-graphite-400 block font-mono">
+                          Measured: {String(c.evidence.measured_value)}
+                          {c.evidence.threshold_value !== null && c.evidence.threshold_value !== undefined
+                            ? ` (threshold: ${String(c.evidence.threshold_value)})` : ''}
+                          {c.evidence.unit ? ` [${c.evidence.unit}]` : ''}
+                        </span>
+                      )}
+                      {c.evidence?.region && c.evidence.region.length === 4 && (
+                        <span className="text-[10px] text-graphite-400 block font-mono">
+                          Region Box: [x:{c.evidence.region[0]}, y:{c.evidence.region[1]}, w:{c.evidence.region[2]}, h:{c.evidence.region[3]}]
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {clean.length > 0 && (
+                <details className="mt-3 group">
+                  <summary className="text-[11px] text-graphite-500 cursor-pointer hover:text-graphite-300 select-none">
+                    {clean.length} clean check{clean.length === 1 ? '' : 's'} (no anomaly found) — click to view
+                  </summary>
+                  <div className="mt-2 space-y-1.5">
+                    {clean.map((c, idx) => (
+                      <div key={idx} className="p-2.5 rounded-lg bg-graphite-950/50 border border-graphite-800/60 text-[11px] text-graphite-400 flex items-center justify-between gap-3">
+                        <span>{c.label}</span>
+                        <span className="text-graphite-500 shrink-0">
+                          {c.evidence?.measured_value !== null && c.evidence?.measured_value !== undefined
+                            ? String(c.evidence.measured_value) : 'clean'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </>
+          );
+        })()}
       </div>
     </ScrollReveal>
   );

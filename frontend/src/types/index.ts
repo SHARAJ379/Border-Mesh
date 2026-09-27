@@ -36,14 +36,45 @@ export interface BlockchainAnchor {
   created_at: string;
 }
 
-export interface RiskSignal {
+export type RiskCheckStatus = 'PASS' | 'FAIL' | 'INFO' | 'NOT_APPLICABLE';
+export type RiskFactorKey = 'MRZ_VALIDATION' | 'TAMPER' | 'FACE' | 'CONSISTENCY' | 'WATCHLIST' | 'IDENTITY';
+
+export interface MatchEvidence {
+  method: 'EXACT' | 'EDIT_DISTANCE' | 'SOUNDEX' | 'METAPHONE';
+  query_token: string;
+  matched_token: string;
+  edit_distance?: number | null;
+}
+
+export interface RiskCheckEvidence {
+  measured_value?: number | string | boolean | null;
+  threshold_value?: number | string | boolean | null;
+  unit?: string | null;
+  /** [x, y, w, h] in the source image's own pixel coordinates. */
+  region?: number[] | null;
+  region_source?: 'document' | 'live_capture' | null;
+  match?: MatchEvidence[] | null;
+}
+
+/**
+ * One itemized entry in the "risk reasons" model -- a check that ran and
+ * what it found, whether it passed, failed, or is a non-blocking note.
+ * Renamed from the old RiskSignal, which only ever carried FAILURES; this
+ * now covers PASS/FAIL/INFO/NOT_APPLICABLE, so a clean case's evidentiary
+ * trail is "23 checks ran, all passed" rather than an empty list.
+ */
+export interface RiskCheck {
   id?: string;
   case_id?: string;
-  module: string;
-  signal: string;
-  severity: RiskLevel;
+  check_key?: string;
+  category: string; // OCR, MRZ, VALIDATION, TAMPER, FACE, WATCHLIST, IDENTITY
+  factor?: RiskFactorKey | null;
+  label: string;
+  status: RiskCheckStatus;
+  severity?: RiskLevel | null;
   confidence: number;
   explanation: string;
+  evidence?: RiskCheckEvidence | null;
   score_impact: number;
 }
 
@@ -91,23 +122,11 @@ export interface OCRResult {
   detected_lines: string[];
 }
 
-export interface TamperSignal {
-  type: string;
-  confidence: number;
-  region: number[];
-  explanation: string;
-}
-
 export interface TamperResult {
   tamper_risk: number;
   risk_level: RiskLevel;
-  signals: TamperSignal[];
+  checks: RiskCheck[];
   heatmap_url?: string;
-  visual_anomalies: Array<{
-    label: string;
-    region: number[];
-    confidence: number;
-  }>;
 }
 
 export interface FaceVerificationResult {
@@ -118,22 +137,13 @@ export interface FaceVerificationResult {
   quality_checks: Record<string, any>;
   anti_spoofing_score: number;
   match_threshold: number;
-  signals?: RiskSignal[];
-}
-
-export interface RuleValidationItem {
-  rule: string;
-  passed: boolean;
-  severity: RiskLevel;
-  explanation: string;
-  confidence: number;
+  checks?: RiskCheck[];
 }
 
 export interface ValidationResult {
   passed_count: number;
   failed_count: number;
-  rules_detail: RuleValidationItem[];
-  signals?: RiskSignal[];
+  checks: RiskCheck[];
 }
 
 export interface RiskFactorContribution {
@@ -145,7 +155,6 @@ export interface RiskFactorContribution {
   weight: number | null;
   raw_risk: number | null;
   weighted_contribution: number;
-  top_signals: string[];
 }
 
 export interface RiskEngineResult {
@@ -153,7 +162,7 @@ export interface RiskEngineResult {
   risk_level: RiskLevel;
   recommendation: string;
   breakdown: RiskFactorContribution[];
-  signals: RiskSignal[];
+  checks: RiskCheck[];
   elapsed_ms?: number;
 }
 
@@ -187,11 +196,14 @@ export interface CaseItem {
   officer_decision: OfficerDecision;
   officer_notes?: string;
   biometrics_purged?: boolean;
+  /** Lightweight risk-check summary for list views -- see CaseDetail.risk_checks for the full itemized list. */
+  flagged_check_count?: number;
+  top_flagged_checks?: string[];
 }
 
 export interface CaseDetail extends CaseItem {
   analyses: DocumentAnalysis[];
-  risk_signals: RiskSignal[];
+  risk_checks: RiskCheck[];
   audit_logs: AuditLog[];
 }
 

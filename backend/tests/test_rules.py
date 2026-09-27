@@ -1,6 +1,15 @@
 from datetime import date
 from app.services.rules_engine import DocumentRulesEngine
 
+
+def _find(checks, check_id):
+    return next(c for c in checks if c["id"] == check_id)
+
+
+def _fails(checks):
+    return [c for c in checks if c["status"] == "FAIL"]
+
+
 def test_document_rules_genuine():
     ocr_data = {
         "fields": {
@@ -27,7 +36,7 @@ def test_document_rules_genuine():
     eval_res = DocumentRulesEngine.evaluate(ocr_data, mrz_data)
     assert eval_res["failed_count"] == 0
     assert eval_res["passed_count"] > 0
-    assert len(eval_res["signals"]) == 0
+    assert len(_fails(eval_res["checks"])) == 0
 
 def test_document_rules_expired():
     ocr_data = {"fields": {"document_number": "X1234567"}}
@@ -40,9 +49,10 @@ def test_document_rules_expired():
         "checksums": []
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, mrz_data)
-    assert any(s["signal"] == "Document Expired" for s in eval_res["signals"])
-    expired_rule = [r for r in eval_res["rules_detail"] if r["rule"] == "DOCUMENT_EXPIRATION"][0]
-    assert expired_rule["passed"] is False
+    assert any(c["label"] == "Document Expired" for c in eval_res["checks"])
+    expired_check = _find(eval_res["checks"], "DOCUMENT_EXPIRATION")
+    assert expired_check["status"] == "FAIL"
+    assert expired_check["evidence"]["measured_value"] == "2020-01-01"
 
 def test_document_rules_mismatch():
     ocr_data = {"fields": {"document_number": "A9999999", "full_name": "JOHN DOE"}}
@@ -55,7 +65,10 @@ def test_document_rules_mismatch():
         "checksums": []
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, mrz_data)
-    assert any("Document Number Inconsistency" in s["signal"] for s in eval_res["signals"])
+    assert any("Document Number Inconsistency" in c["label"] for c in eval_res["checks"])
+    crosscheck = _find(eval_res["checks"], "DOC_NUMBER_CROSSCHECK")
+    assert crosscheck["status"] == "FAIL"
+    assert crosscheck["factor"] == "CONSISTENCY"
 
 def test_sex_code_valid():
     ocr_data = {"fields": {"document_number": "X1234567"}}
@@ -68,9 +81,9 @@ def test_sex_code_valid():
         "checksums": []
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, mrz_data)
-    sex_rule = [r for r in eval_res["rules_detail"] if r["rule"] == "SEX_CODE_FORMAT"][0]
-    assert sex_rule["passed"] is True
-    assert not any(s["signal"] == "Malformed Sex/Gender Code" for s in eval_res["signals"])
+    sex_check = _find(eval_res["checks"], "SEX_CODE_FORMAT")
+    assert sex_check["status"] == "PASS"
+    assert not any(c["label"] == "Malformed Sex/Gender Code" for c in eval_res["checks"])
 
 def test_sex_code_invalid():
     ocr_data = {"fields": {"document_number": "X1234567"}}
@@ -83,9 +96,9 @@ def test_sex_code_invalid():
         "checksums": []
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, mrz_data)
-    sex_rule = [r for r in eval_res["rules_detail"] if r["rule"] == "SEX_CODE_FORMAT"][0]
-    assert sex_rule["passed"] is False
-    assert any(s["signal"] == "Malformed Sex/Gender Code" for s in eval_res["signals"])
+    sex_check = _find(eval_res["checks"], "SEX_CODE_FORMAT")
+    assert sex_check["status"] == "FAIL"
+    assert any(c["label"] == "Malformed Sex/Gender Code" for c in eval_res["checks"])
 
 def test_document_number_crosscheck_survives_single_ocr_slip():
     """
@@ -108,7 +121,7 @@ def test_document_number_crosscheck_survives_single_ocr_slip():
         "checksums": []
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, mrz_data)
-    assert not any("Document Number Inconsistency" in s["signal"] for s in eval_res["signals"])
+    assert not any("Document Number Inconsistency" in c["label"] for c in eval_res["checks"])
 
 def test_document_number_crosscheck_still_catches_real_mismatch():
     """Tolerance is bounded to a single edit -- a genuinely different document
@@ -123,7 +136,7 @@ def test_document_number_crosscheck_still_catches_real_mismatch():
         "checksums": []
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, mrz_data)
-    assert any("Document Number Inconsistency" in s["signal"] for s in eval_res["signals"])
+    assert any("Document Number Inconsistency" in c["label"] for c in eval_res["checks"])
 
 def test_document_number_crosscheck_rejects_a_trivially_short_ocr_reading():
     """
@@ -133,7 +146,7 @@ def test_document_number_crosscheck_rejects_a_trivially_short_ocr_reading():
     length floor. A near-degenerate OCR reading of the document number
     (e.g. a single surviving character out of a badly garbled read) is then
     trivially "contained" in almost any longer MRZ document number,
-    regardless of how different the two actually are -- silently defeating
+    regardless of how different the two actually are, silently defeating
     the exact cross-check this rule exists to run. A genuinely truncated-
     but-real partial read (the case substring containment is meant to
     tolerate) is always several characters long; a bare single character is
@@ -150,7 +163,24 @@ def test_document_number_crosscheck_rejects_a_trivially_short_ocr_reading():
         "checksums": []
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, mrz_data)
-    assert any("Document Number Inconsistency" in s["signal"] for s in eval_res["signals"])
+    assert any("Document Number Inconsistency" in c["label"] for c in eval_res["checks"])
+
+def test_document_number_crosscheck_not_applicable_when_one_source_missing():
+    """When only one source extracted a document number, the crosscheck
+    can't run -- it must show as NOT_APPLICABLE, not silently absent or a
+    false PASS claiming a comparison that never happened."""
+    ocr_data = {"fields": {}}
+    mrz_data = {
+        "surname": "KAUL",
+        "document_number": "X1234567",
+        "nationality": "UTO",
+        "birth_date": "000101",
+        "expiry_date": "300101",
+        "checksums": []
+    }
+    eval_res = DocumentRulesEngine.evaluate(ocr_data, mrz_data)
+    crosscheck = _find(eval_res["checks"], "DOC_NUMBER_CROSSCHECK")
+    assert crosscheck["status"] == "NOT_APPLICABLE"
 
 def test_aadhaar_document_not_penalized_for_missing_mrz():
     """
@@ -170,16 +200,16 @@ def test_aadhaar_document_not_penalized_for_missing_mrz():
         }
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
-    assert not any(s["signal"] == "Missing Machine Readable Zone" for s in eval_res["signals"])
-    mrz_rule = [r for r in eval_res["rules_detail"] if r["rule"] == "MRZ_PRESENCE"][0]
-    assert mrz_rule["passed"] is True
+    assert not any(c["label"] == "Missing Machine Readable Zone" for c in eval_res["checks"])
+    mrz_check = _find(eval_res["checks"], "MRZ_PRESENCE")
+    assert mrz_check["status"] == "NOT_APPLICABLE"
 
 def test_passport_without_mrz_still_flagged():
     """Non-Aadhaar documents missing an MRZ must still be flagged -- the
     Aadhaar exemption must not silently apply to every document type."""
     ocr_data = {"fields": {"full_name": "JOHN DOE", "document_number": "A9999999"}}
     eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
-    assert any(s["signal"] == "Missing Machine Readable Zone" for s in eval_res["signals"])
+    assert any(c["label"] == "Missing Machine Readable Zone" for c in eval_res["checks"])
 
 def test_pan_document_not_penalized_for_missing_mrz():
     """PAN cards are an Income Tax Department ID, not an ICAO 9303 travel
@@ -192,9 +222,9 @@ def test_pan_document_not_penalized_for_missing_mrz():
         }
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
-    assert not any(s["signal"] == "Missing Machine Readable Zone" for s in eval_res["signals"])
-    mrz_rule = [r for r in eval_res["rules_detail"] if r["rule"] == "MRZ_PRESENCE"][0]
-    assert mrz_rule["passed"] is True
+    assert not any(c["label"] == "Missing Machine Readable Zone" for c in eval_res["checks"])
+    mrz_check = _find(eval_res["checks"], "MRZ_PRESENCE")
+    assert mrz_check["status"] == "NOT_APPLICABLE"
 
 def test_dl_document_not_penalized_for_missing_mrz():
     """Driving Licences carry no ICAO MRZ either -- same exemption as
@@ -207,7 +237,7 @@ def test_dl_document_not_penalized_for_missing_mrz():
         }
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
-    assert not any(s["signal"] == "Missing Machine Readable Zone" for s in eval_res["signals"])
+    assert not any(c["label"] == "Missing Machine Readable Zone" for c in eval_res["checks"])
 
 def test_pan_format_validation_passes_for_well_formed_pan_and_decodes_entity_type():
     ocr_data = {
@@ -218,10 +248,10 @@ def test_pan_format_validation_passes_for_well_formed_pan_and_decodes_entity_typ
         }
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
-    pan_rule = [r for r in eval_res["rules_detail"] if r["rule"] == "PAN_FORMAT_VALIDATION"][0]
-    assert pan_rule["passed"] is True
-    assert "Individual" in pan_rule["explanation"]
-    assert not any("PAN" in s["signal"] for s in eval_res["signals"])
+    pan_check = _find(eval_res["checks"], "PAN_FORMAT_VALIDATION")
+    assert pan_check["status"] == "PASS"
+    assert "Individual" in pan_check["explanation"]
+    assert not any("PAN" in c["label"] for c in _fails(eval_res["checks"]))
 
 def test_pan_format_validation_fails_for_malformed_structure():
     """A structurally invalid PAN (wrong character classes/length) is a real,
@@ -235,9 +265,9 @@ def test_pan_format_validation_fails_for_malformed_structure():
         }
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
-    pan_rule = [r for r in eval_res["rules_detail"] if r["rule"] == "PAN_FORMAT_VALIDATION"][0]
-    assert pan_rule["passed"] is False
-    assert any(s["signal"] == "Malformed PAN Structure" for s in eval_res["signals"])
+    pan_check = _find(eval_res["checks"], "PAN_FORMAT_VALIDATION")
+    assert pan_check["status"] == "FAIL"
+    assert any(c["label"] == "Malformed PAN Structure" for c in eval_res["checks"])
 
 def test_pan_format_validation_flags_unrecognized_entity_letter():
     """The 4th PAN character encodes a documented, enumerable entity type
@@ -252,7 +282,7 @@ def test_pan_format_validation_flags_unrecognized_entity_letter():
         }
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
-    assert any(s["signal"] == "Unrecognized PAN Entity-Type Code" for s in eval_res["signals"])
+    assert any(c["label"] == "Unrecognized PAN Entity-Type Code" for c in eval_res["checks"])
 
 def test_pan_rule_skipped_for_non_pan_documents():
     """A passport document number that happens to be PAN-shaped must not
@@ -260,7 +290,7 @@ def test_pan_rule_skipped_for_non_pan_documents():
     not on the number's shape alone."""
     ocr_data = {"fields": {"document_number": "ABCPK1234F", "document_type": "PASSPORT"}}
     eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
-    assert not any(r["rule"] == "PAN_FORMAT_VALIDATION" for r in eval_res["rules_detail"])
+    assert not any(c["id"] == "PAN_FORMAT_VALIDATION" for c in eval_res["checks"])
 
 def test_dl_expiry_uses_ocr_field_when_no_mrz_present():
     """
@@ -277,9 +307,9 @@ def test_dl_expiry_uses_ocr_field_when_no_mrz_present():
         }
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
-    assert any(s["signal"] == "Document Expired" for s in eval_res["signals"])
-    expired_rule = [r for r in eval_res["rules_detail"] if r["rule"] == "DOCUMENT_EXPIRATION"][0]
-    assert expired_rule["passed"] is False
+    assert any(c["label"] == "Document Expired" for c in eval_res["checks"])
+    expired_check = _find(eval_res["checks"], "DOCUMENT_EXPIRATION")
+    assert expired_check["status"] == "FAIL"
 
 def test_dl_valid_expiry_passes():
     ocr_data = {
@@ -290,9 +320,9 @@ def test_dl_valid_expiry_passes():
         }
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
-    expired_rule = [r for r in eval_res["rules_detail"] if r["rule"] == "DOCUMENT_EXPIRATION"][0]
-    assert expired_rule["passed"] is True
-    assert not any(s["signal"] == "Document Expired" for s in eval_res["signals"])
+    expired_check = _find(eval_res["checks"], "DOCUMENT_EXPIRATION")
+    assert expired_check["status"] == "PASS"
+    assert not any(c["label"] == "Document Expired" for c in eval_res["checks"])
 
 def test_voter_id_document_not_penalized_for_missing_mrz():
     """Voter ID (EPIC) cards are an Election Commission of India ID, not an
@@ -305,9 +335,9 @@ def test_voter_id_document_not_penalized_for_missing_mrz():
         }
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
-    assert not any(s["signal"] == "Missing Machine Readable Zone" for s in eval_res["signals"])
-    mrz_rule = [r for r in eval_res["rules_detail"] if r["rule"] == "MRZ_PRESENCE"][0]
-    assert mrz_rule["passed"] is True
+    assert not any(c["label"] == "Missing Machine Readable Zone" for c in eval_res["checks"])
+    mrz_check = _find(eval_res["checks"], "MRZ_PRESENCE")
+    assert mrz_check["status"] == "NOT_APPLICABLE"
 
 def test_voter_id_format_validation_passes_for_well_formed_epic_number():
     ocr_data = {
@@ -318,9 +348,9 @@ def test_voter_id_format_validation_passes_for_well_formed_epic_number():
         }
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
-    voter_id_rule = [r for r in eval_res["rules_detail"] if r["rule"] == "VOTER_ID_FORMAT_VALIDATION"][0]
-    assert voter_id_rule["passed"] is True
-    assert not any("EPIC" in s["signal"] for s in eval_res["signals"])
+    voter_id_check = _find(eval_res["checks"], "VOTER_ID_FORMAT_VALIDATION")
+    assert voter_id_check["status"] == "PASS"
+    assert not any("EPIC" in c["label"] for c in _fails(eval_res["checks"]))
 
 def test_voter_id_format_validation_flags_non_standard_structure_as_medium_not_high():
     """
@@ -338,18 +368,18 @@ def test_voter_id_format_validation_flags_non_standard_structure_as_medium_not_h
         }
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
-    voter_id_rule = [r for r in eval_res["rules_detail"] if r["rule"] == "VOTER_ID_FORMAT_VALIDATION"][0]
-    assert voter_id_rule["passed"] is False
-    assert voter_id_rule["severity"] == "MEDIUM"
-    signal = [s for s in eval_res["signals"] if s["signal"] == "Non-Standard EPIC Format"][0]
-    assert signal["severity"] == "MEDIUM"
+    voter_id_check = _find(eval_res["checks"], "VOTER_ID_FORMAT_VALIDATION")
+    assert voter_id_check["status"] == "FAIL"
+    assert voter_id_check["severity"] == "MEDIUM"
+    check = next(c for c in eval_res["checks"] if c["label"] == "Non-Standard EPIC Format")
+    assert check["severity"] == "MEDIUM"
 
 def test_voter_id_rule_skipped_for_non_voter_id_documents():
     """An EPIC-shaped document number on a passport must not trigger
     Voter-ID-specific validation -- the rule is gated on document_type."""
     ocr_data = {"fields": {"document_number": "ABC1234567", "document_type": "PASSPORT"}}
     eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
-    assert not any(r["rule"] == "VOTER_ID_FORMAT_VALIDATION" for r in eval_res["rules_detail"])
+    assert not any(c["id"] == "VOTER_ID_FORMAT_VALIDATION" for c in eval_res["checks"])
 
 def test_visa_document_not_penalized_for_missing_mrz():
     """A Visa is visually extracted only (no ICAO MRZ modeled) -- same MRZ
@@ -362,9 +392,9 @@ def test_visa_document_not_penalized_for_missing_mrz():
         }
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
-    assert not any(s["signal"] == "Missing Machine Readable Zone" for s in eval_res["signals"])
-    mrz_rule = [r for r in eval_res["rules_detail"] if r["rule"] == "MRZ_PRESENCE"][0]
-    assert mrz_rule["passed"] is True
+    assert not any(c["label"] == "Missing Machine Readable Zone" for c in eval_res["checks"])
+    mrz_check = _find(eval_res["checks"], "MRZ_PRESENCE")
+    assert mrz_check["status"] == "NOT_APPLICABLE"
 
 def test_visa_stay_duration_expired_flags_critical():
     """
@@ -381,11 +411,11 @@ def test_visa_stay_duration_expired_flags_critical():
         }
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
-    visa_rule = [r for r in eval_res["rules_detail"] if r["rule"] == "VISA_STAY_DURATION_VALIDATION"][0]
-    assert visa_rule["passed"] is False
-    assert visa_rule["severity"] == "CRITICAL"
-    signal = [s for s in eval_res["signals"] if s["signal"] == "Visa Stay Duration Expired"][0]
-    assert signal["severity"] == "CRITICAL"
+    visa_check = _find(eval_res["checks"], "VISA_STAY_DURATION_VALIDATION")
+    assert visa_check["status"] == "FAIL"
+    assert visa_check["severity"] == "CRITICAL"
+    check = next(c for c in eval_res["checks"] if c["label"] == "Visa Stay Duration Expired")
+    assert check["severity"] == "CRITICAL"
 
 def test_visa_stay_duration_valid_passes():
     ocr_data = {
@@ -396,9 +426,9 @@ def test_visa_stay_duration_valid_passes():
         }
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
-    visa_rule = [r for r in eval_res["rules_detail"] if r["rule"] == "VISA_STAY_DURATION_VALIDATION"][0]
-    assert visa_rule["passed"] is True
-    assert not any(s["signal"] == "Visa Stay Duration Expired" for s in eval_res["signals"])
+    visa_check = _find(eval_res["checks"], "VISA_STAY_DURATION_VALIDATION")
+    assert visa_check["status"] == "PASS"
+    assert not any(c["label"] == "Visa Stay Duration Expired" for c in eval_res["checks"])
 
 def test_visa_stay_duration_missing_pends_visual_confirmation():
     """No stay-duration date extracted -- LOW/pending, not penalized, same
@@ -410,9 +440,9 @@ def test_visa_stay_duration_missing_pends_visual_confirmation():
         }
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
-    visa_rule = [r for r in eval_res["rules_detail"] if r["rule"] == "VISA_STAY_DURATION_VALIDATION"][0]
-    assert visa_rule["passed"] is True
-    assert not any(s["signal"] == "Visa Stay Duration Expired" for s in eval_res["signals"])
+    visa_check = _find(eval_res["checks"], "VISA_STAY_DURATION_VALIDATION")
+    assert visa_check["status"] == "PASS"
+    assert not any(c["label"] == "Visa Stay Duration Expired" for c in eval_res["checks"])
 
 def test_visa_rule_skipped_for_non_visa_documents():
     """A visa-shaped stay_duration_until on a passport must not trigger
@@ -425,4 +455,102 @@ def test_visa_rule_skipped_for_non_visa_documents():
         }
     }
     eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
-    assert not any(r["rule"] == "VISA_STAY_DURATION_VALIDATION" for r in eval_res["rules_detail"])
+    assert not any(c["id"] == "VISA_STAY_DURATION_VALIDATION" for c in eval_res["checks"])
+
+
+def test_visa_entry_validation_recognized_value_passes():
+    ocr_data = {
+        "fields": {
+            "document_number": "UV1234567",
+            "document_type": "VISA",
+            "entry_validation": "Multiple Entry"
+        }
+    }
+    eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
+    check = _find(eval_res["checks"], "VISA_ENTRY_VALIDATION_CHECK")
+    assert check["status"] == "PASS"
+    assert not any(c["label"] == "Unrecognized Visa Entry Validation Value" for c in eval_res["checks"])
+
+
+def test_visa_entry_validation_unrecognized_value_flags_medium():
+    ocr_data = {
+        "fields": {
+            "document_number": "UV1234567",
+            "document_type": "VISA",
+            "entry_validation": "PERPETUAL ENTRY"  # not a recognized value
+        }
+    }
+    eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
+    check = _find(eval_res["checks"], "VISA_ENTRY_VALIDATION_CHECK")
+    assert check["status"] == "FAIL"
+    assert check["severity"] == "MEDIUM"
+    signal = next(c for c in eval_res["checks"] if c["label"] == "Unrecognized Visa Entry Validation Value")
+    assert signal["severity"] == "MEDIUM"
+
+
+def test_visa_entry_validation_missing_pends_visual_confirmation():
+    ocr_data = {
+        "fields": {
+            "document_number": "UV1234567",
+            "document_type": "VISA"
+        }
+    }
+    eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
+    check = _find(eval_res["checks"], "VISA_ENTRY_VALIDATION_CHECK")
+    assert check["status"] == "PASS"
+    assert not any(c["label"] == "Unrecognized Visa Entry Validation Value" for c in eval_res["checks"])
+
+
+def test_permit_not_penalized_for_missing_mrz():
+    """A Permit is visually extracted only (no ICAO MRZ modeled) -- same MRZ
+    exemption as Aadhaar/PAN/DL/Voter ID/Visa."""
+    ocr_data = {
+        "fields": {
+            "full_name": "TOLA ADEYEMI",
+            "document_number": "RP7734210",
+            "document_type": "PERMIT"
+        }
+    }
+    eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
+    assert not any(c["label"] == "Missing Machine Readable Zone" for c in eval_res["checks"])
+    mrz_check = _find(eval_res["checks"], "MRZ_PRESENCE")
+    assert mrz_check["status"] == "NOT_APPLICABLE"
+
+
+def test_permit_expiry_uses_ocr_field_via_document_expiration_rule():
+    """
+    A Permit has a genuine printed expiry but no MRZ -- same shape as
+    Driving Licence (test_dl_expiry_uses_ocr_field_when_no_mrz_present),
+    so it deliberately reuses RULE 2 (DOCUMENT_EXPIRATION) directly rather
+    than getting its own PERMIT_EXPIRATION rule, which would double-count
+    the same date (see rules_engine.py's comment at RULE 9's end for why).
+    """
+    ocr_data = {
+        "fields": {
+            "document_number": "RP7734210",
+            "document_type": "PERMIT",
+            "date_of_expiry": "01/01/2020"  # expired
+        }
+    }
+    eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
+    assert any(c["label"] == "Document Expired" for c in eval_res["checks"])
+    expired_check = _find(eval_res["checks"], "DOCUMENT_EXPIRATION")
+    assert expired_check["status"] == "FAIL"
+    # And confirms the fix actually prevents double-counting: exactly one
+    # DOCUMENT_EXPIRATION entry, no separate PERMIT_EXPIRATION rule at all.
+    assert len([c for c in eval_res["checks"] if c["id"] == "DOCUMENT_EXPIRATION"]) == 1
+    assert not any(c["id"] == "PERMIT_EXPIRATION" for c in eval_res["checks"])
+
+
+def test_permit_valid_expiry_passes():
+    ocr_data = {
+        "fields": {
+            "document_number": "RP7734210",
+            "document_type": "PERMIT",
+            "date_of_expiry": "01/01/2031"  # not yet expired
+        }
+    }
+    eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
+    expired_check = _find(eval_res["checks"], "DOCUMENT_EXPIRATION")
+    assert expired_check["status"] == "PASS"
+    assert not any(c["label"] == "Document Expired" for c in eval_res["checks"])

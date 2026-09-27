@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional
 
 from app.core.config import settings
 from app.ml.face_verifier import FaceDetectorAndVerifier
+from app.services.risk_types import RiskCheckStatus, RiskFactorKey, make_check, make_evidence
 
 class BaseFaceService(ABC):
     @abstractmethod
@@ -111,14 +112,13 @@ class FaceVerificationService(BaseFaceService):
                 "quality_checks": {"issue": "Could not detect clear face in document photo"},
                 "anti_spoofing_score": 0.5,
                 "match_threshold": self.MATCH_THRESHOLD,
-                "signals": [{
-                    "module": "FACE",
-                    "signal": "Document Portrait Undetected",
-                    "severity": "HIGH",
-                    "confidence": 0.90,
-                    "explanation": "Automated face detector could not isolate a clear frontal portrait in document image.",
-                    "score_impact": 20.0
-                }]
+                "checks": [make_check(
+                    id="FACE_DOCUMENT_PORTRAIT_DETECTION", category="FACE", factor=RiskFactorKey.FACE,
+                    label="Document Portrait Undetected", status=RiskCheckStatus.FAIL, severity="HIGH",
+                    confidence=0.90,
+                    explanation="Automated face detector could not isolate a clear frontal portrait in document image.",
+                    score_impact=20.0,
+                )]
             }
 
         if len(doc_faces) > 1:
@@ -137,14 +137,14 @@ class FaceVerificationService(BaseFaceService):
                 "quality_checks": {"multiple_faces_detected": len(doc_faces)},
                 "anti_spoofing_score": 0.4,
                 "match_threshold": self.MATCH_THRESHOLD,
-                "signals": [{
-                    "module": "FACE",
-                    "signal": "Multiple Faces in Document Image",
-                    "severity": "MEDIUM",
-                    "confidence": 0.85,
-                    "explanation": "More than one plausible face region detected in the document image. Manual review required.",
-                    "score_impact": 15.0
-                }]
+                "checks": [make_check(
+                    id="FACE_DOCUMENT_FACE_COUNT", category="FACE", factor=RiskFactorKey.FACE,
+                    label="Multiple Faces in Document Image", status=RiskCheckStatus.FAIL, severity="MEDIUM",
+                    confidence=0.85,
+                    explanation="More than one plausible face region detected in the document image. Manual review required.",
+                    evidence=make_evidence(measured_value=len(doc_faces), threshold_value=1, unit="face_count"),
+                    score_impact=15.0,
+                )]
             }
 
         if not live_faces:
@@ -158,14 +158,13 @@ class FaceVerificationService(BaseFaceService):
                 "quality_checks": {"issue": "No face found in live capture"},
                 "anti_spoofing_score": 0.5,
                 "match_threshold": self.MATCH_THRESHOLD,
-                "signals": [{
-                    "module": "FACE",
-                    "signal": "Live Subject Face Not Detected",
-                    "severity": "HIGH",
-                    "confidence": 0.90,
-                    "explanation": "No face identified in the live webcam/capture frame. Re-take photo.",
-                    "score_impact": 20.0
-                }]
+                "checks": [make_check(
+                    id="FACE_LIVE_CAPTURE_DETECTION", category="FACE", factor=RiskFactorKey.FACE,
+                    label="Live Subject Face Not Detected", status=RiskCheckStatus.FAIL, severity="HIGH",
+                    confidence=0.90,
+                    explanation="No face identified in the live webcam/capture frame. Re-take photo.",
+                    score_impact=20.0,
+                )]
             }
 
         if len(live_faces) > 1:
@@ -177,14 +176,14 @@ class FaceVerificationService(BaseFaceService):
                 "quality_checks": {"multiple_faces_detected": len(live_faces)},
                 "anti_spoofing_score": 0.4,
                 "match_threshold": self.MATCH_THRESHOLD,
-                "signals": [{
-                    "module": "FACE",
-                    "signal": "Multiple Faces in Live Capture",
-                    "severity": "MEDIUM",
-                    "confidence": 0.95,
-                    "explanation": "More than one person detected in live capture frame. Individual screening required.",
-                    "score_impact": 15.0
-                }]
+                "checks": [make_check(
+                    id="FACE_LIVE_CAPTURE_FACE_COUNT", category="FACE", factor=RiskFactorKey.FACE,
+                    label="Multiple Faces in Live Capture", status=RiskCheckStatus.FAIL, severity="MEDIUM",
+                    confidence=0.95,
+                    explanation="More than one person detected in live capture frame. Individual screening required.",
+                    evidence=make_evidence(measured_value=len(live_faces), threshold_value=1, unit="face_count"),
+                    score_impact=15.0,
+                )]
             }
 
         # Crop both faces
@@ -209,46 +208,83 @@ class FaceVerificationService(BaseFaceService):
         is_match = similarity >= self.MATCH_THRESHOLD
         status = "MATCH" if is_match else "REVIEW_REQUIRED"
 
-        signals = []
-        if not is_match:
-            signals.append({
-                "module": "FACE",
-                "signal": "Biometric Face Mismatch",
-                "severity": "HIGH",
-                "confidence": round(1.0 - similarity, 2),
-                "explanation": f"Live face biometric similarity score ({round(similarity*100, 1)}%) is below verification threshold ({self.MATCH_THRESHOLD*100:.0f}%). Manual identity review required.",
-                "score_impact": 25.0
-            })
-        if quality.get("is_blurry") or quality.get("is_dark"):
-            signals.append({
-                "module": "FACE",
-                "signal": "Sub-Optimal Biometric Quality",
-                "severity": "LOW",
-                "confidence": 0.85,
-                "explanation": "Live facial capture exhibits suboptimal lighting or motion blur.",
-                "score_impact": 5.0
-            })
+        checks = []
+        match_evidence = make_evidence(measured_value=round(similarity, 3), threshold_value=self.MATCH_THRESHOLD, unit="cosine_similarity")
+        if is_match:
+            checks.append(make_check(
+                id="FACE_BIOMETRIC_MATCH", category="FACE", factor=RiskFactorKey.FACE,
+                label="Biometric Face Match", status=RiskCheckStatus.PASS, confidence=round(similarity, 2),
+                explanation=f"Live face biometric similarity score ({round(similarity*100, 1)}%) meets or exceeds "
+                            f"verification threshold ({self.MATCH_THRESHOLD*100:.0f}%).",
+                evidence=match_evidence,
+            ))
+        else:
+            checks.append(make_check(
+                id="FACE_BIOMETRIC_MATCH", category="FACE", factor=RiskFactorKey.FACE,
+                label="Biometric Face Mismatch", status=RiskCheckStatus.FAIL, severity="HIGH",
+                confidence=round(1.0 - similarity, 2),
+                explanation=f"Live face biometric similarity score ({round(similarity*100, 1)}%) is below "
+                            f"verification threshold ({self.MATCH_THRESHOLD*100:.0f}%). Manual identity review required.",
+                evidence=match_evidence, score_impact=25.0,
+            ))
+
+        # Quality metrics -- three independent checks (brightness, sharpness,
+        # moire) rather than one collapsed "quality" signal, each citing its
+        # own measured value against its own threshold: exactly the kind of
+        # detail that makes a rejection defensible instead of arbitrary.
+        brightness = quality.get("mean_brightness")
+        if brightness is not None:
+            is_dark, is_overexposed = quality.get("is_dark"), quality.get("is_overexposed")
+            checks.append(make_check(
+                id="FACE_QUALITY_BRIGHTNESS", category="FACE", factor=RiskFactorKey.FACE,
+                label="Live Capture Brightness", status=RiskCheckStatus.FAIL if (is_dark or is_overexposed) else RiskCheckStatus.PASS,
+                severity="LOW" if (is_dark or is_overexposed) else None, confidence=0.85,
+                explanation=(
+                    f"Live capture is {'underexposed' if is_dark else 'overexposed'} "
+                    f"(mean brightness {brightness})."
+                    if (is_dark or is_overexposed) else
+                    f"Live capture brightness ({brightness}) is within the acceptable range."
+                ),
+                evidence=make_evidence(measured_value=brightness, threshold_value="45–220", unit="mean_brightness_0_255"),
+                score_impact=2.5 if (is_dark or is_overexposed) else 0.0,
+            ))
+
+        sharpness = quality.get("laplacian_sharpness")
+        if sharpness is not None:
+            is_blurry = quality.get("is_blurry")
+            checks.append(make_check(
+                id="FACE_QUALITY_SHARPNESS", category="FACE", factor=RiskFactorKey.FACE,
+                label="Live Capture Sharpness", status=RiskCheckStatus.FAIL if is_blurry else RiskCheckStatus.PASS,
+                severity="LOW" if is_blurry else None, confidence=0.85,
+                explanation=(
+                    f"Live facial capture exhibits motion blur (sharpness {sharpness})."
+                    if is_blurry else
+                    f"Live facial capture is adequately sharp (sharpness {sharpness})."
+                ),
+                evidence=make_evidence(measured_value=sharpness, threshold_value=35.0, unit="laplacian_variance"),
+                score_impact=2.5 if is_blurry else 0.0,
+            ))
+
         # FFT-based moire/halftone signal (FaceDetectorAndVerifier.analyze_
-        # frequency_artifacts, see its own docstring) -- the first time
-        # anything liveness/anti-spoofing-related has actually reached
-        # risk_engine.py as a signal; anti_spoofing_score/liveness_score
-        # existed before this but was never wired into a signal the risk
-        # engine ingests. LOW severity and non-blocking BY DESIGN: it never
-        # changes `is_match`/`status` above, and LOW severity means it can
-        # never trigger risk_engine's CRITICAL-signal floor. This is a
-        # coarse HEURISTIC INDICATOR only -- not a certified Presentation
-        # Attack Detection (PAD) verdict -- validated solely against a
-        # self-generated synthetic proxy (real face crops with a synthetic
-        # moire/halftone pattern overlaid), never against a real spoof
-        # capture (see scripts/check_frequency_liveness_signal.py's own
-        # disclosure). Officer discretion, not an automated block.
-        if quality.get("frequency_artifact_detected"):
-            signals.append({
-                "module": "FACE",
-                "signal": "Possible Screen/Print Recapture Pattern",
-                "severity": "LOW",
-                "confidence": 0.5,
-                "explanation": (
+        # frequency_artifacts, see its own docstring). LOW severity and
+        # non-blocking BY DESIGN: it never changes `is_match`/`status`
+        # above, and LOW severity means it can never trigger risk_engine's
+        # CRITICAL-signal floor. This is a coarse HEURISTIC INDICATOR only --
+        # not a certified Presentation Attack Detection (PAD) verdict --
+        # validated solely against a self-generated synthetic proxy (real
+        # face crops with a synthetic moire/halftone pattern overlaid),
+        # never against a real spoof capture (see
+        # scripts/check_frequency_liveness_signal.py's own disclosure).
+        # Officer discretion, not an automated block.
+        moire = quality.get("moire_energy_concentration")
+        if moire is not None:
+            artifact_detected = quality.get("frequency_artifact_detected")
+            checks.append(make_check(
+                id="FACE_QUALITY_MOIRE", category="FACE", factor=RiskFactorKey.FACE,
+                label="Possible Screen/Print Recapture Pattern" if artifact_detected else "Liveness Frequency-Pattern Scan",
+                status=RiskCheckStatus.FAIL if artifact_detected else RiskCheckStatus.PASS,
+                severity="LOW" if artifact_detected else None, confidence=0.5,
+                explanation=(
                     "Frequency-domain analysis of the live capture detected a "
                     "periodic pattern (moire/halftone-like) more consistent with "
                     "photographing a screen or a printed photo than a direct live "
@@ -258,9 +294,13 @@ class FaceVerificationService(BaseFaceService):
                     "captures (see scripts/check_frequency_liveness_signal.py). "
                     "Non-blocking: does not affect the match decision above. "
                     "Officer discretion advised."
+                    if artifact_detected else
+                    "No periodic screen-replay/halftone pattern detected in the live capture's frequency "
+                    "spectrum. Heuristic indicator only, not a certified PAD result."
                 ),
-                "score_impact": 5.0
-            })
+                evidence=make_evidence(measured_value=moire, threshold_value=0.25, unit="energy_concentration"),
+                score_impact=5.0 if artifact_detected else 0.0,
+            ))
 
         return {
             "similarity": round(similarity, 3),
@@ -270,7 +310,7 @@ class FaceVerificationService(BaseFaceService):
             "quality_checks": quality,
             "anti_spoofing_score": quality.get("liveness_score", 0.95),
             "match_threshold": self.MATCH_THRESHOLD,
-            "signals": signals,
+            "checks": checks,
             # The live capture's own embedding -- feeds the cross-case
             # duplicate-identity gallery (identity_gallery_service.py). Only
             # ever the LIVE embedding, never the document photo's: the

@@ -52,8 +52,8 @@ def test_multiple_document_faces_are_flagged_not_silently_picked(tmp_path):
 
     assert result["status"] == "MULTIPLE_FACES"
     assert any(
-        sig["module"] == "FACE" and "Multiple" in sig["signal"] and "document" in sig["explanation"].lower()
-        for sig in result["signals"]
+        c["category"] == "FACE" and "Multiple" in c["label"] and "document" in c["explanation"].lower()
+        for c in result["checks"]
     )
 
 
@@ -104,11 +104,12 @@ def test_frequency_artifact_signal_is_low_severity_and_does_not_block_a_match(tm
 
     assert result["status"] == "MATCH"
     assert result["similarity"] == 0.99
-    freq_signals = [s for s in result["signals"] if s["signal"] == "Possible Screen/Print Recapture Pattern"]
-    assert len(freq_signals) == 1
-    assert freq_signals[0]["severity"] == "LOW"
-    assert freq_signals[0]["module"] == "FACE"
-    assert "not a certified" in freq_signals[0]["explanation"].lower()
+    freq_checks = [c for c in result["checks"] if c["label"] == "Possible Screen/Print Recapture Pattern"]
+    assert len(freq_checks) == 1
+    assert freq_checks[0]["status"] == "FAIL"
+    assert freq_checks[0]["severity"] == "LOW"
+    assert freq_checks[0]["category"] == "FACE"
+    assert "not a certified" in freq_checks[0]["explanation"].lower()
 
 
 def test_no_frequency_artifact_signal_when_not_detected(tmp_path):
@@ -131,4 +132,6 @@ def test_no_frequency_artifact_signal_when_not_detected(tmp_path):
 
     result = service.verify(doc_path, live_path, "test-case-no-freq-artifact")
 
-    assert not any(s["signal"] == "Possible Screen/Print Recapture Pattern" for s in result["signals"])
+    assert not any(c["label"] == "Possible Screen/Print Recapture Pattern" for c in result["checks"])
+    moire_check = next(c for c in result["checks"] if c["id"] == "FACE_QUALITY_MOIRE")
+    assert moire_check["status"] == "PASS"

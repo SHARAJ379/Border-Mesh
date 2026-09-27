@@ -1,7 +1,18 @@
 import re
-from typing import List
+from typing import List, Optional, TypedDict
 
 import jellyfish
+
+
+class TokenMatchEvidence(TypedDict):
+    """Which method judged two name tokens equivalent, and the exact tokens
+    involved -- exposed so an officer can see WHY a watchlist name matched
+    and judge for themselves whether it's a plausible false positive,
+    rather than a bare boolean."""
+    method: str  # "EXACT" | "EDIT_DISTANCE" | "SOUNDEX" | "METAPHONE"
+    query_token: str
+    matched_token: str
+    edit_distance: Optional[int]
 
 
 def levenshtein(a: str, b: str) -> int:
@@ -40,14 +51,14 @@ def _name_tokens(name: str) -> List[str]:
     return [t for t in re.split(r'\s+', name.upper().strip()) if t]
 
 
-def phonetic_or_fuzzy_token_equal(a: str, b: str) -> bool:
+def phonetic_or_fuzzy_token_equal(a: str, b: str) -> Optional[TokenMatchEvidence]:
     """
-    True if two individual name tokens are plausibly the same identity token
-    -- either OCR noise (small edit distance) or a genuine phonetic /
-    transliteration variant (Soundex or Metaphone match), e.g. 'MOHAMMED' vs
-    'MUHAMMAD' or 'STEPHENSON' vs 'STEVENSON' (Levenshtein distance 2 --
-    outside a single-OCR-slip tolerance -- but identical under both Soundex
-    and Metaphone).
+    Returns match evidence if two individual name tokens are plausibly the
+    same identity token -- either OCR noise (small edit distance) or a
+    genuine phonetic/transliteration variant (Soundex or Metaphone match),
+    e.g. 'MOHAMMED' vs 'MUHAMMAD' or 'STEPHENSON' vs 'STEVENSON'
+    (Levenshtein distance 2 -- outside a single-OCR-slip tolerance -- but
+    identical under both Soundex and Metaphone). None if no method matches.
 
     Checks BOTH Soundex and Metaphone rather than either alone, because they
     fail in different, non-overlapping cases (verified empirically):
@@ -56,28 +67,32 @@ def phonetic_or_fuzzy_token_equal(a: str, b: str) -> bool:
     share a Soundex code (Metaphone's silent-H handling keeps them apart).
     """
     if not a or not b:
-        return False
+        return None
     if a == b:
-        return True
-    if len(a) >= 4 and len(b) >= 4 and abs(len(a) - len(b)) <= 1 and levenshtein(a, b) <= 1:
-        return True
+        return {"method": "EXACT", "query_token": b, "matched_token": a, "edit_distance": 0}
+    if len(a) >= 4 and len(b) >= 4 and abs(len(a) - len(b)) <= 1:
+        dist = levenshtein(a, b)
+        if dist <= 1:
+            return {"method": "EDIT_DISTANCE", "query_token": b, "matched_token": a, "edit_distance": dist}
     # Phonetic codes on very short tokens (initials, 1-2 letter fragments)
     # collide too easily to be meaningful, and a large length gap undermines
     # the whole premise of "sounds the same" -- gate on both.
     if len(a) >= 3 and len(b) >= 3 and abs(len(a) - len(b)) <= 3:
         if jellyfish.soundex(a) == jellyfish.soundex(b):
-            return True
+            return {"method": "SOUNDEX", "query_token": b, "matched_token": a, "edit_distance": None}
         if jellyfish.metaphone(a) == jellyfish.metaphone(b):
-            return True
-    return False
+            return {"method": "METAPHONE", "query_token": b, "matched_token": a, "edit_distance": None}
+    return None
 
 
-def fuzzy_name_match(entry_name: str, query_name: str) -> bool:
+def fuzzy_name_match(entry_name: str, query_name: str) -> Optional[List[TokenMatchEvidence]]:
     """
-    True if every token in entry_name (a watchlist record's stored name) has
-    a phonetically-or-fuzzily matching token somewhere in query_name (the
-    noisy OCR/MRZ-extracted name being screened), regardless of token order
-    or extra tokens in the query (e.g. a middle name).
+    Returns the list of per-token match evidence (one entry per token in
+    entry_name) if every token in entry_name (a watchlist record's stored
+    name) has a phonetically-or-fuzzily matching token somewhere in
+    query_name (the noisy OCR/MRZ-extracted name being screened), regardless
+    of token order or extra tokens in the query (e.g. a middle name). None
+    if any entry token has no match.
 
     Deliberately token-level rather than whole-string: a real name can vary
     in two places at once (a transliterated given name AND surname), which a
@@ -88,8 +103,18 @@ def fuzzy_name_match(entry_name: str, query_name: str) -> bool:
     entry_tokens = _name_tokens(entry_name)
     query_tokens = _name_tokens(query_name)
     if not entry_tokens or not query_tokens:
-        return False
-    return all(
-        any(phonetic_or_fuzzy_token_equal(et, qt) for qt in query_tokens)
-        for et in entry_tokens
-    )
+        return None
+
+    matches: List[TokenMatchEvidence] = []
+    for et in entry_tokens:
+        best: Optional[TokenMatchEvidence] = None
+        for qt in query_tokens:
+            evidence = phonetic_or_fuzzy_token_equal(et, qt)
+            if evidence and (best is None or evidence["method"] == "EXACT"):
+                best = evidence
+                if best["method"] == "EXACT":
+                    break
+        if best is None:
+            return None
+        matches.append(best)
+    return matches

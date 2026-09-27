@@ -3,12 +3,17 @@ from typing import Dict, Any, List, Optional
 import re
 
 from app.utils.text_similarity import fuzzy_equal
+from app.services.risk_types import RiskCheckStatus, RiskFactorKey, make_check, make_evidence
 
 class DocumentRulesEngine:
     """
     Configurable rules engine validating document consistency and integrity.
     Validates cross-field matching (visual OCR vs MRZ), expiration, checksums, and date boundaries.
-    Generates structured risk signals for rule failures.
+    Generates a unified list of itemized risk checks (RiskCheckResult shape,
+    see app.services.risk_types) -- one entry per rule evaluated, whether it
+    passed, failed, or didn't apply, each carrying its own structured
+    evidence (the value measured vs. the threshold/expected value it was
+    judged against).
     """
 
     # Document types with no ICAO 9303 Machine Readable Zone by design --
@@ -17,7 +22,18 @@ class DocumentRulesEngine:
     # this codebase's existing style of duplicating the "AADHAAR" check
     # independently at each of its call sites rather than sharing one
     # constant across the OCR and rules-engine modules.
-    NON_MRZ_DOCUMENT_TYPES = ("AADHAAR", "PAN", "DRIVING_LICENSE", "VOTER_ID", "VISA")
+    NON_MRZ_DOCUMENT_TYPES = ("AADHAAR", "PAN", "DRIVING_LICENSE", "VOTER_ID", "VISA", "PERMIT")
+
+    # Enumerated values a Visa's "Entry Validation" field plausibly holds --
+    # not an exhaustive real-world standard (none is published the way
+    # ICAO 9303's MRZ format is), but a genuine, checkable set of the values
+    # this project's own visa specimens can carry (see ocr_service.py's
+    # parse_visa_fields / synthetic_generator.py's generate_visa). An
+    # unrecognized value is a caution (MEDIUM), not a hard failure -- a real
+    # visa could plausibly use wording this table doesn't happen to list.
+    VISA_ENTRY_VALIDATION_VALUES = {
+        "SINGLE ENTRY", "DOUBLE ENTRY", "MULTIPLE ENTRY", "TRANSIT"
+    }
 
     # CBDT's published PAN entity-type codes (the 4th of the 5 leading
     # letters). Only the well-established, commonly-cited codes are listed
@@ -77,70 +93,61 @@ class DocumentRulesEngine:
 
     @classmethod
     def evaluate(cls, ocr_data: Dict[str, Any], mrz_data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-        results: List[Dict[str, Any]] = []
-        signals: List[Dict[str, Any]] = []
-        
+        checks: List[Dict[str, Any]] = []
+
+        def add(
+            id: str, label: str, passed_or_status, severity: Optional[str],
+            explanation: str, confidence: float,
+            evidence: Optional[Dict[str, Any]] = None, score_impact: float = 0.0,
+            category: str = "VALIDATION", factor: str = RiskFactorKey.MRZ_VALIDATION,
+        ):
+            if passed_or_status is True:
+                status = RiskCheckStatus.PASS
+            elif passed_or_status is False:
+                status = RiskCheckStatus.FAIL
+            else:
+                status = passed_or_status  # NOT_APPLICABLE passed through directly
+            checks.append(make_check(
+                id=id, category=category, factor=factor, label=label, status=status,
+                severity=severity if status == RiskCheckStatus.FAIL else None,
+                confidence=confidence, explanation=explanation, evidence=evidence,
+                score_impact=score_impact,
+            ))
+
         today = date.today()
         fields = ocr_data.get("fields", {})
-        
+
         # RULE 1: MRZ Checksum Validation
         if mrz_data and mrz_data.get("checksums"):
             for cs in mrz_data["checksums"]:
                 field_name = cs["field"]
                 is_valid = cs["valid"]
+                check_id = f"MRZ_{field_name.upper().replace(' ', '_')}"
+                evidence = make_evidence(
+                    measured_value=cs["check_digit"], threshold_value=cs["calculated_check_digit"],
+                    unit="check_digit",
+                )
                 if is_valid:
-                    results.append({
-                        "rule": f"MRZ_{field_name.upper().replace(' ', '_')}",
-                        "passed": True,
-                        "severity": "LOW",
-                        "explanation": f"{field_name} matches calculated check digit ({cs['check_digit']}).",
-                        "confidence": 0.99
-                    })
+                    add(check_id, field_name, True, None,
+                        f"{field_name} matches calculated check digit ({cs['check_digit']}).",
+                        0.99, evidence=evidence, category="MRZ")
                 else:
-                    results.append({
-                        "rule": f"MRZ_{field_name.upper().replace(' ', '_')}",
-                        "passed": False,
-                        "severity": "HIGH",
-                        "explanation": f"{field_name} check digit mismatch: found '{cs['check_digit']}', expected '{cs['calculated_check_digit']}'.",
-                        "confidence": 0.99
-                    })
-                    signals.append({
-                        "module": "MRZ",
-                        "signal": f"MRZ Checksum Mismatch ({field_name})",
-                        "severity": "HIGH",
-                        "confidence": 0.99,
-                        "explanation": f"ICAO 9303 check digit verification failed for {field_name}. Potential character alteration.",
-                        "score_impact": 18.0
-                    })
+                    add(check_id, f"MRZ Checksum Mismatch ({field_name})", False, "HIGH",
+                        f"ICAO 9303 check digit verification failed for {field_name}: found "
+                        f"'{cs['check_digit']}', expected '{cs['calculated_check_digit']}'. "
+                        f"Potential character alteration.",
+                        0.99, evidence=evidence, score_impact=18.0, category="MRZ")
         elif fields.get("document_type") in cls.NON_MRZ_DOCUMENT_TYPES:
             # Aadhaar/PAN/Driving Licence are national IDs, not ICAO 9303
             # travel documents -- none of them carry an MRZ by design, so a
-            # missing MRZ here is expected, not a red flag. Penalizing them
-            # the same as a passport missing its MRZ would misclassify every
-            # genuine card of these types as suspicious.
-            results.append({
-                "rule": "MRZ_PRESENCE",
-                "passed": True,
-                "severity": "LOW",
-                "explanation": "Not applicable — this document type does not carry an ICAO Machine Readable Zone by design.",
-                "confidence": 0.95
-            })
+            # missing MRZ here is expected, not a red flag.
+            add("MRZ_PRESENCE", "MRZ Presence", RiskCheckStatus.NOT_APPLICABLE, None,
+                "Not applicable — this document type does not carry an ICAO Machine Readable Zone by design.",
+                0.95, category="MRZ")
         elif not mrz_data:
-            results.append({
-                "rule": "MRZ_PRESENCE",
-                "passed": False,
-                "severity": "HIGH",
-                "explanation": "No valid Machine Readable Zone (MRZ) detected on document.",
-                "confidence": 0.92
-            })
-            signals.append({
-                "module": "MRZ",
-                "signal": "Missing Machine Readable Zone",
-                "severity": "HIGH",
-                "confidence": 0.92,
-                "explanation": "Standard travel documents must contain a readable 2-line or 3-line MRZ zone.",
-                "score_impact": 20.0
-            })
+            add("MRZ_PRESENCE", "Missing Machine Readable Zone", False, "HIGH",
+                "Standard travel documents must contain a readable 2-line or 3-line MRZ zone.",
+                0.92, score_impact=20.0, category="MRZ")
 
         # RULE 1b: PAN Structural Format Validation
         #
@@ -153,201 +160,112 @@ class DocumentRulesEngine:
         # letter's entity-type encoding.
         if fields.get("document_type") == "PAN":
             pan_number = fields.get("document_number") or ""
+            evidence = make_evidence(measured_value=pan_number, threshold_value="AAAAA9999A", unit="pan_format")
             if not re.fullmatch(r'[A-Z]{5}[0-9]{4}[A-Z]', pan_number):
-                results.append({
-                    "rule": "PAN_FORMAT_VALIDATION",
-                    "passed": False,
-                    "severity": "HIGH",
-                    "explanation": f"'{pan_number}' does not match the required PAN structure (5 letters, 4 digits, 1 letter).",
-                    "confidence": 0.97
-                })
-                signals.append({
-                    "module": "VALIDATION",
-                    "signal": "Malformed PAN Structure",
-                    "severity": "HIGH",
-                    "confidence": 0.97,
-                    "explanation": "Permanent Account Number does not conform to the CBDT-published 10-character format.",
-                    "score_impact": 20.0
-                })
+                add("PAN_FORMAT_VALIDATION", "Malformed PAN Structure", False, "HIGH",
+                    f"'{pan_number}' does not match the required PAN structure (5 letters, 4 digits, 1 letter). "
+                    f"Permanent Account Number does not conform to the CBDT-published 10-character format.",
+                    0.97, evidence=evidence, score_impact=20.0)
             else:
                 entity_letter = pan_number[3]
                 entity_type = cls.PAN_ENTITY_TYPES.get(entity_letter)
                 if entity_type:
-                    results.append({
-                        "rule": "PAN_FORMAT_VALIDATION",
-                        "passed": True,
-                        "severity": "LOW",
-                        "explanation": f"Well-formed PAN; 4th character '{entity_letter}' indicates entity type {entity_type}.",
-                        "confidence": 0.97
-                    })
+                    add("PAN_FORMAT_VALIDATION", "PAN Format Validation", True, None,
+                        f"Well-formed PAN; 4th character '{entity_letter}' indicates entity type {entity_type}.",
+                        0.97, evidence=evidence)
                 else:
-                    results.append({
-                        "rule": "PAN_FORMAT_VALIDATION",
-                        "passed": False,
-                        "severity": "MEDIUM",
-                        "explanation": f"PAN structure is well-formed, but 4th character '{entity_letter}' is not a recognized entity-type code.",
-                        "confidence": 0.70
-                    })
-                    signals.append({
-                        "module": "VALIDATION",
-                        "signal": "Unrecognized PAN Entity-Type Code",
-                        "severity": "MEDIUM",
-                        "confidence": 0.70,
-                        "explanation": f"4th PAN character '{entity_letter}' does not match any documented CBDT entity-type code.",
-                        "score_impact": 8.0
-                    })
+                    entity_evidence = make_evidence(
+                        measured_value=entity_letter,
+                        threshold_value=", ".join(sorted(cls.PAN_ENTITY_TYPES)),
+                        unit="pan_entity_code",
+                    )
+                    add("PAN_FORMAT_VALIDATION", "Unrecognized PAN Entity-Type Code", False, "MEDIUM",
+                        f"PAN structure is well-formed, but 4th character '{entity_letter}' is not a "
+                        f"recognized entity-type code.",
+                        0.70, evidence=entity_evidence, score_impact=8.0)
 
         # RULE 1c: Voter ID (EPIC) Structural Format Validation
         #
         # The Election Commission of India's current EPIC format (3 letters,
         # 7 digits) is publicly documented, so it's genuinely checkable --
         # but unlike PAN's CBDT-enforced format, EPIC numbering has
-        # well-documented real-world non-conformance (older and non-standard
-        # or duplicate registrations are a known, ECI-acknowledged issue,
-        # most visibly surfaced during the 2025 Special Intensive
-        # Revision). A mismatch is therefore a caution (MEDIUM), not a hard
-        # structural failure the way a malformed PAN is (HIGH) -- flagging
-        # it as HIGH would misclassify genuine older cards as fabricated.
-        # There is no equivalent to PAN's 4th-letter entity-type decode:
-        # the 3 leading letters have no publicly documented decodable
-        # meaning, so none is invented here.
+        # well-documented real-world non-conformance. A mismatch is
+        # therefore a caution (MEDIUM), not a hard structural failure.
         if fields.get("document_type") == "VOTER_ID":
             voter_id_number = fields.get("document_number") or ""
+            evidence = make_evidence(measured_value=voter_id_number, threshold_value="AAA9999999", unit="epic_format")
             if re.fullmatch(r'[A-Z]{3}[0-9]{7}', voter_id_number):
-                results.append({
-                    "rule": "VOTER_ID_FORMAT_VALIDATION",
-                    "passed": True,
-                    "severity": "LOW",
-                    "explanation": f"'{voter_id_number}' matches the ECI's standard EPIC format (3 letters, 7 digits).",
-                    "confidence": 0.90
-                })
+                add("VOTER_ID_FORMAT_VALIDATION", "Voter ID Format Validation", True, None,
+                    f"'{voter_id_number}' matches the ECI's standard EPIC format (3 letters, 7 digits).",
+                    0.90, evidence=evidence)
             else:
-                results.append({
-                    "rule": "VOTER_ID_FORMAT_VALIDATION",
-                    "passed": False,
-                    "severity": "MEDIUM",
-                    "explanation": f"'{voter_id_number}' does not match the ECI's standard EPIC format (3 letters, 7 digits). Older or non-standard registrations are known to legitimately deviate, so this is a caution rather than a hard failure.",
-                    "confidence": 0.65
-                })
-                signals.append({
-                    "module": "VALIDATION",
-                    "signal": "Non-Standard EPIC Format",
-                    "severity": "MEDIUM",
-                    "confidence": 0.65,
-                    "explanation": "Voter ID number does not conform to the Election Commission of India's standard 10-character EPIC format.",
-                    "score_impact": 8.0
-                })
+                add("VOTER_ID_FORMAT_VALIDATION", "Non-Standard EPIC Format", False, "MEDIUM",
+                    f"'{voter_id_number}' does not match the ECI's standard EPIC format (3 letters, 7 digits). "
+                    f"Older or non-standard registrations are known to legitimately deviate, so this is a "
+                    f"caution rather than a hard failure.",
+                    0.65, evidence=evidence, score_impact=8.0)
 
         # RULE 2: Expiration Check
         expiry_date = None
         if mrz_data and mrz_data.get("expiry_date"):
             expiry_date = cls.parse_yymmdd(mrz_data["expiry_date"])
         elif fields.get("date_of_expiry"):
-            # Non-MRZ documents with a genuine printed expiry (e.g. a
-            # Driving Licence's "Valid Till") -- Aadhaar/PAN have no expiry
-            # field by design and leave this None, so they correctly fall
-            # through to the "pending visual confirmation" branch below
-            # rather than being penalized for having no expiry to check.
             expiry_date = cls.parse_ddmmyyyy(fields["date_of_expiry"])
 
         if expiry_date:
+            evidence = make_evidence(
+                measured_value=expiry_date.strftime('%Y-%m-%d'),
+                threshold_value=today.strftime('%Y-%m-%d'),
+                unit="expiry_date_vs_today",
+            )
             if expiry_date < today:
-                results.append({
-                    "rule": "DOCUMENT_EXPIRATION",
-                    "passed": False,
-                    "severity": "CRITICAL",
-                    "explanation": f"Document expired on {expiry_date.strftime('%Y-%m-%d')} (Current date: {today.strftime('%Y-%m-%d')}).",
-                    "confidence": 0.99
-                })
-                signals.append({
-                    "module": "VALIDATION",
-                    "signal": "Document Expired",
-                    "severity": "CRITICAL",
-                    "confidence": 0.99,
-                    "explanation": f"Travel document validity expired on {expiry_date.strftime('%Y-%m-%d')}. Document is invalid for travel.",
-                    "score_impact": 28.0
-                })
+                add("DOCUMENT_EXPIRATION", "Document Expired", False, "CRITICAL",
+                    f"Travel document validity expired on {expiry_date.strftime('%Y-%m-%d')} "
+                    f"(current date: {today.strftime('%Y-%m-%d')}). Document is invalid for travel.",
+                    0.99, evidence=evidence, score_impact=28.0)
             else:
-                results.append({
-                    "rule": "DOCUMENT_EXPIRATION",
-                    "passed": True,
-                    "severity": "LOW",
-                    "explanation": f"Document is valid until {expiry_date.strftime('%Y-%m-%d')}.",
-                    "confidence": 0.99
-                })
+                add("DOCUMENT_EXPIRATION", "Document Expiration Check", True, None,
+                    f"Document is valid until {expiry_date.strftime('%Y-%m-%d')}.",
+                    0.99, evidence=evidence)
         else:
-            results.append({
-                "rule": "DOCUMENT_EXPIRATION",
-                "passed": True,
-                "severity": "LOW",
-                "explanation": "Expiry date verified or pending visual confirmation.",
-                "confidence": 0.85
-            })
+            add("DOCUMENT_EXPIRATION", "Document Expiration Check", True, None,
+                "Expiry date verified or pending visual confirmation.", 0.85)
 
         # RULE 3: DOB Plausibility & Impossible Date
         dob_date = None
         if mrz_data and mrz_data.get("birth_date"):
             dob_date = cls.parse_yymmdd(mrz_data["birth_date"])
             if dob_date is None:
-                results.append({
-                    "rule": "IMPOSSIBLE_DATE",
-                    "passed": False,
-                    "severity": "HIGH",
-                    "explanation": f"Malformed birth date in MRZ: '{mrz_data.get('birth_date')}'.",
-                    "confidence": 0.98
-                })
-                signals.append({
-                    "module": "VALIDATION",
-                    "signal": "Impossible Date in MRZ",
-                    "severity": "HIGH",
-                    "confidence": 0.98,
-                    "explanation": "Birth date contains non-existent calendar date values.",
-                    "score_impact": 15.0
-                })
+                add("IMPOSSIBLE_DATE", "Impossible Date in MRZ", False, "HIGH",
+                    f"Birth date contains non-existent calendar date values: '{mrz_data.get('birth_date')}'.",
+                    0.98, evidence=make_evidence(measured_value=mrz_data.get('birth_date'), unit="birth_date_raw"),
+                    score_impact=15.0)
             elif dob_date > today:
-                results.append({
-                    "rule": "FUTURE_BIRTH_DATE",
-                    "passed": False,
-                    "severity": "CRITICAL",
-                    "explanation": f"Date of birth ({dob_date.strftime('%Y-%m-%d')}) is in the future.",
-                    "confidence": 0.99
-                })
-                signals.append({
-                    "module": "VALIDATION",
-                    "signal": "Future Date of Birth",
-                    "severity": "CRITICAL",
-                    "confidence": 0.99,
-                    "explanation": "Holder's recorded birth date is after current calendar date.",
-                    "score_impact": 25.0
-                })
+                add("FUTURE_BIRTH_DATE", "Future Date of Birth", False, "CRITICAL",
+                    f"Holder's recorded birth date ({dob_date.strftime('%Y-%m-%d')}) is after current calendar date.",
+                    0.99,
+                    evidence=make_evidence(measured_value=dob_date.strftime('%Y-%m-%d'),
+                                            threshold_value=today.strftime('%Y-%m-%d'), unit="dob_vs_today"),
+                    score_impact=25.0)
             else:
-                results.append({
-                    "rule": "BIRTH_DATE_PLAUSIBILITY",
-                    "passed": True,
-                    "severity": "LOW",
-                    "explanation": f"Valid birth date ({dob_date.strftime('%Y-%m-%d')}).",
-                    "confidence": 0.99
-                })
+                add("BIRTH_DATE_PLAUSIBILITY", "Birth Date Plausibility", True, None,
+                    f"Valid birth date ({dob_date.strftime('%Y-%m-%d')}).", 0.99)
 
-        # RULE 4: Visual Zone vs MRZ Document Number Inconsistency
+        # RULE 4: Visual Zone vs MRZ Document Number Inconsistency -- a
+        # genuine CROSS-SOURCE consistency check (two independent OCR passes
+        # over the same physical number), unlike every other rule here,
+        # which validates a single source's own well-formedness. Tagged
+        # factor=CONSISTENCY, not MRZ_VALIDATION, so it contributes to the
+        # score exactly once, via the Consistency factor -- see
+        # risk_engine.py's own comment on why this must not also be summed
+        # into MRZ_VALIDATION's raw risk.
         ocr_doc_no = fields.get("document_number")
         mrz_doc_no = mrz_data.get("document_number") if mrz_data else None
-        
+
         if ocr_doc_no and mrz_doc_no:
             clean_ocr_no = re.sub(r'[^A-Za-z0-9]', '', ocr_doc_no).upper()
             clean_mrz_no = re.sub(r'[^A-Za-z0-9]', '', mrz_doc_no).upper()
 
-            # The visual zone and the MRZ line are two independent OCR passes
-            # over the same physical number -- each can misread a different
-            # character, or one pass can genuinely truncate a few leading/
-            # trailing characters (a real partial read, not a failed one).
-            # Tolerate a single-edit difference (bounded, length-gated via
-            # fuzzy_equal) or outright substring containment -- but only
-            # when the SHORTER side is long enough to mean something: a
-            # near-degenerate OCR reading (e.g. one surviving character out
-            # of a badly garbled read) is trivially "contained" in almost
-            # any longer number regardless of how different they really
-            # are, which would silently defeat this exact cross-check.
             MIN_SUBSTRING_MATCH_LENGTH = 5
             shorter_len = min(len(clean_ocr_no), len(clean_mrz_no))
             is_consistent = (
@@ -358,30 +276,22 @@ class DocumentRulesEngine:
                 )
                 or fuzzy_equal(clean_ocr_no, clean_mrz_no)
             )
+            evidence = make_evidence(measured_value=ocr_doc_no, threshold_value=mrz_doc_no, unit="document_number")
             if not is_consistent:
-                results.append({
-                    "rule": "DOC_NUMBER_CROSSCHECK",
-                    "passed": False,
-                    "severity": "HIGH",
-                    "explanation": f"Visual text document number '{ocr_doc_no}' does not match MRZ document number '{mrz_doc_no}'.",
-                    "confidence": 0.95
-                })
-                signals.append({
-                    "module": "VALIDATION",
-                    "signal": "Document Number Inconsistency",
-                    "severity": "HIGH",
-                    "confidence": 0.95,
-                    "explanation": f"Visual inspection zone displays '{ocr_doc_no}' but machine-readable zone records '{mrz_doc_no}'.",
-                    "score_impact": 22.0
-                })
+                add("DOC_NUMBER_CROSSCHECK", "Document Number Inconsistency", False, "HIGH",
+                    f"Visual inspection zone displays '{ocr_doc_no}' but machine-readable zone records "
+                    f"'{mrz_doc_no}'.",
+                    0.95, evidence=evidence, score_impact=22.0,
+                    factor=RiskFactorKey.CONSISTENCY)
             else:
-                results.append({
-                    "rule": "DOC_NUMBER_CROSSCHECK",
-                    "passed": True,
-                    "severity": "LOW",
-                    "explanation": "Visual document number matches MRZ document number.",
-                    "confidence": 0.95
-                })
+                add("DOC_NUMBER_CROSSCHECK", "Document Number Crosscheck", True, None,
+                    "Visual document number matches MRZ document number.",
+                    0.95, evidence=evidence, factor=RiskFactorKey.CONSISTENCY)
+        else:
+            add("DOC_NUMBER_CROSSCHECK", "Document Number Crosscheck", RiskCheckStatus.NOT_APPLICABLE, None,
+                "Visual-vs-MRZ document number crosscheck requires both sources; at least one was not "
+                "extracted, so the crosscheck did not run.",
+                0.5, factor=RiskFactorKey.CONSISTENCY)
 
         # RULE 5: Required Fields Presence
         missing_fields = []
@@ -389,144 +299,94 @@ class DocumentRulesEngine:
             missing_fields.append("Full Name")
         if not (ocr_doc_no or mrz_doc_no):
             missing_fields.append("Document Number")
-        
+
         if missing_fields:
-            results.append({
-                "rule": "REQUIRED_FIELDS_PRESENCE",
-                "passed": False,
-                "severity": "MEDIUM",
-                "explanation": f"Missing mandatory document field(s): {', '.join(missing_fields)}.",
-                "confidence": 0.90
-            })
-            signals.append({
-                "module": "VALIDATION",
-                "signal": "Missing Mandatory Identity Fields",
-                "severity": "MEDIUM",
-                "confidence": 0.90,
-                "explanation": f"Failed to detect {', '.join(missing_fields)} in visual or machine-readable zones.",
-                "score_impact": 10.0
-            })
+            add("REQUIRED_FIELDS_PRESENCE", "Missing Mandatory Identity Fields", False, "MEDIUM",
+                f"Failed to detect {', '.join(missing_fields)} in visual or machine-readable zones.",
+                0.90, evidence=make_evidence(measured_value=", ".join(missing_fields),
+                                              threshold_value="Full Name, Document Number", unit="required_fields"),
+                score_impact=10.0)
         else:
-            results.append({
-                "rule": "REQUIRED_FIELDS_PRESENCE",
-                "passed": True,
-                "severity": "LOW",
-                "explanation": "All mandatory identity fields detected.",
-                "confidence": 0.95
-            })
+            add("REQUIRED_FIELDS_PRESENCE", "Required Fields Presence", True, None,
+                "All mandatory identity fields detected.", 0.95)
 
         # RULE 6: Nationality Code Format (ISO 3166-1 alpha-3 in MRZ)
         if mrz_data and mrz_data.get("nationality"):
             nat = mrz_data["nationality"]
+            evidence = make_evidence(measured_value=nat, threshold_value="3-letter ISO alpha code", unit="nationality_code")
             if len(nat) == 3 and nat.isalpha():
-                results.append({
-                    "rule": "NATIONALITY_CODE_FORMAT",
-                    "passed": True,
-                    "severity": "LOW",
-                    "explanation": f"Valid 3-letter ICAO country/nationality code: '{nat}'.",
-                    "confidence": 0.98
-                })
+                add("NATIONALITY_CODE_FORMAT", "Nationality Code Format", True, None,
+                    f"Valid 3-letter ICAO country/nationality code: '{nat}'.", 0.98, evidence=evidence)
             else:
-                results.append({
-                    "rule": "NATIONALITY_CODE_FORMAT",
-                    "passed": False,
-                    "severity": "MEDIUM",
-                    "explanation": f"Malformed nationality code in MRZ: '{nat}'. Expected 3-letter ISO code.",
-                    "confidence": 0.95
-                })
-                signals.append({
-                    "module": "VALIDATION",
-                    "signal": "Malformed Nationality Code",
-                    "severity": "MEDIUM",
-                    "confidence": 0.95,
-                    "explanation": f"MRZ nationality '{nat}' violates ICAO 3-letter alpha format.",
-                    "score_impact": 8.0
-                })
+                add("NATIONALITY_CODE_FORMAT", "Malformed Nationality Code", False, "MEDIUM",
+                    f"MRZ nationality '{nat}' violates ICAO 3-letter alpha format.",
+                    0.95, evidence=evidence, score_impact=8.0)
 
-        # RULE 7: Sex/Gender Code Validation (ICAO 9303 — must be M, F, or X)
+        # RULE 7: Sex/Gender Code Validation (ICAO 9303 -- must be M, F, or X)
         if mrz_data and mrz_data.get("sex"):
             sex = mrz_data["sex"].upper()
+            evidence = make_evidence(measured_value=sex, threshold_value="M, F, or X", unit="sex_code")
             if sex in ("M", "F", "X"):
-                results.append({
-                    "rule": "SEX_CODE_FORMAT",
-                    "passed": True,
-                    "severity": "LOW",
-                    "explanation": f"Valid ICAO sex/gender code: '{sex}'.",
-                    "confidence": 0.98
-                })
+                add("SEX_CODE_FORMAT", "Sex/Gender Code Format", True, None,
+                    f"Valid ICAO sex/gender code: '{sex}'.", 0.98, evidence=evidence)
             else:
-                results.append({
-                    "rule": "SEX_CODE_FORMAT",
-                    "passed": False,
-                    "severity": "MEDIUM",
-                    "explanation": f"Malformed sex/gender code in MRZ: '{sex}'. Expected M, F, or X.",
-                    "confidence": 0.90
-                })
-                signals.append({
-                    "module": "VALIDATION",
-                    "signal": "Malformed Sex/Gender Code",
-                    "severity": "MEDIUM",
-                    "confidence": 0.90,
-                    "explanation": f"MRZ sex/gender code '{sex}' violates ICAO 9303 format (expected M/F/X).",
-                    "score_impact": 6.0
-                })
+                add("SEX_CODE_FORMAT", "Malformed Sex/Gender Code", False, "MEDIUM",
+                    f"MRZ sex/gender code '{sex}' violates ICAO 9303 format (expected M/F/X).",
+                    0.90, evidence=evidence, score_impact=6.0)
 
         # RULE 8: Visa Stay Duration Validity
-        #
-        # Reuses RULE 2 (DOCUMENT_EXPIRATION)'s own date-plausibility
-        # pattern -- parse the printed date, compare it against today --
-        # applied to a Visa's 'Stay Duration' field instead of a generic
-        # document expiry. This is deliberately a separate rule from RULE 2
-        # rather than populating date_of_expiry for visas: a visa's own
-        # validity window (when it can be used to enter) and the permitted
-        # duration of a given stay are genuinely distinct concepts on a
-        # real visa, and an overstayed traveler is exactly the kind of
-        # finding a border-screening tool must not silently miss. CRITICAL
-        # severity mirrors DOCUMENT_EXPIRATION's own: an overstayed visa is
-        # not valid for continued presence, the same way an expired
-        # document isn't valid for travel.
         if fields.get("document_type") == "VISA":
             stay_until = cls.parse_ddmmyyyy(fields.get("stay_duration_until"))
             if stay_until:
+                evidence = make_evidence(measured_value=stay_until.strftime('%Y-%m-%d'),
+                                          threshold_value=today.strftime('%Y-%m-%d'), unit="stay_until_vs_today")
                 if stay_until < today:
-                    results.append({
-                        "rule": "VISA_STAY_DURATION_VALIDATION",
-                        "passed": False,
-                        "severity": "CRITICAL",
-                        "explanation": f"Authorized stay duration expired on {stay_until.strftime('%Y-%m-%d')} (Current date: {today.strftime('%Y-%m-%d')}).",
-                        "confidence": 0.97
-                    })
-                    signals.append({
-                        "module": "VALIDATION",
-                        "signal": "Visa Stay Duration Expired",
-                        "severity": "CRITICAL",
-                        "confidence": 0.97,
-                        "explanation": f"Authorized stay duration on this visa expired on {stay_until.strftime('%Y-%m-%d')}. Holder is not authorized for continued presence.",
-                        "score_impact": 24.0
-                    })
+                    add("VISA_STAY_DURATION_VALIDATION", "Visa Stay Duration Expired", False, "CRITICAL",
+                        f"Authorized stay duration on this visa expired on {stay_until.strftime('%Y-%m-%d')} "
+                        f"(current date: {today.strftime('%Y-%m-%d')}). Holder is not authorized for "
+                        f"continued presence.",
+                        0.97, evidence=evidence, score_impact=24.0)
                 else:
-                    results.append({
-                        "rule": "VISA_STAY_DURATION_VALIDATION",
-                        "passed": True,
-                        "severity": "LOW",
-                        "explanation": f"Authorized stay is valid until {stay_until.strftime('%Y-%m-%d')}.",
-                        "confidence": 0.97
-                    })
+                    add("VISA_STAY_DURATION_VALIDATION", "Visa Stay Duration Validation", True, None,
+                        f"Authorized stay is valid until {stay_until.strftime('%Y-%m-%d')}.",
+                        0.97, evidence=evidence)
             else:
-                results.append({
-                    "rule": "VISA_STAY_DURATION_VALIDATION",
-                    "passed": True,
-                    "severity": "LOW",
-                    "explanation": "Stay duration verified or pending visual confirmation.",
-                    "confidence": 0.80
-                })
+                add("VISA_STAY_DURATION_VALIDATION", "Visa Stay Duration Validation", True, None,
+                    "Stay duration verified or pending visual confirmation.", 0.80)
 
-        passed_count = sum(1 for r in results if r["passed"])
-        failed_count = sum(1 for r in results if not r["passed"])
+        # RULE 9: Visa Entry Validation Field Check
+        if fields.get("document_type") == "VISA":
+            entry_validation = (fields.get("entry_validation") or "").strip().upper()
+            if not entry_validation:
+                add("VISA_ENTRY_VALIDATION_CHECK", "Visa Entry Validation Check", True, None,
+                    "Entry validation field verified or pending visual confirmation.", 0.75)
+            elif entry_validation in cls.VISA_ENTRY_VALIDATION_VALUES:
+                add("VISA_ENTRY_VALIDATION_CHECK", "Visa Entry Validation Check", True, None,
+                    f"Entry validation '{entry_validation}' is a recognized visa entry type.",
+                    0.90, evidence=make_evidence(measured_value=entry_validation,
+                                                  threshold_value=", ".join(sorted(cls.VISA_ENTRY_VALIDATION_VALUES)),
+                                                  unit="visa_entry_type"))
+            else:
+                add("VISA_ENTRY_VALIDATION_CHECK", "Unrecognized Visa Entry Validation Value", False, "MEDIUM",
+                    f"Visa's printed entry validation field ('{entry_validation}') does not match any "
+                    f"recognized entry type ({', '.join(sorted(cls.VISA_ENTRY_VALIDATION_VALUES))}).",
+                    0.60, evidence=make_evidence(measured_value=entry_validation,
+                                                  threshold_value=", ".join(sorted(cls.VISA_ENTRY_VALIDATION_VALUES)),
+                                                  unit="visa_entry_type"),
+                    score_impact=8.0)
+
+        # Permit deliberately has NO dedicated expiration rule here, unlike
+        # Visa's stay-duration check above -- a Permit has only one temporal
+        # concept (its own validity), the same shape as Driving Licence,
+        # which already reuses RULE 2 (DOCUMENT_EXPIRATION) directly rather
+        # than getting its own PERMIT_EXPIRATION rule, which would
+        # double-count the same date.
+
+        passed_count = sum(1 for c in checks if c["status"] == RiskCheckStatus.PASS)
+        failed_count = sum(1 for c in checks if c["status"] == RiskCheckStatus.FAIL)
 
         return {
             "passed_count": passed_count,
             "failed_count": failed_count,
-            "rules_detail": results,
-            "signals": signals
+            "checks": checks,
         }

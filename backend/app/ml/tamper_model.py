@@ -179,10 +179,50 @@ class TamperForensics:
 
                 # Check variance deviation from image background
                 if roi_var > 1400:
+                    anomaly_type, explanation = TamperForensics._classify_splice_shape(cw, ch, x, y)
                     anomalies.append({
-                        "type": "edge_discontinuity",
+                        "type": anomaly_type,
                         "region": [int(x), int(y), int(cw), int(ch)],
                         "confidence": min(0.95, round(0.65 + (roi_var / 5000), 2)),
-                        "explanation": f"High-frequency boundary discontinuity detected at coordinate ({x}, {y})."
+                        "explanation": explanation,
+                        # The actual measured region variance vs. the 1400
+                        # threshold it was judged against -- previously only
+                        # encoded opaquely into `confidence` above, now
+                        # exposed as citable evidence too (see
+                        # tamper_service.py's own check construction).
+                        "roi_variance": round(roi_var, 1),
                     })
         return anomalies[:5] # Return top most prominent
+
+    # A pasted stamp/seal patch is a genuinely different shape class from a
+    # replaced-photo or altered-text patch: this project's own synthetic
+    # stamp specimen (see synthetic_generator.py's 'stamp_manipulated' mode)
+    # is a 180x60px rectangle -- exactly 3.0:1 -- while a photo replacement
+    # is closer to 1.3:1 (caught primarily by analyze_portrait_region's own
+    # Signal C anyway) and an altered text block tends to be wide and short
+    # but less extreme than a stamp. This window is centered on that real
+    # 3.0:1 ratio with margin on both sides, bounded above by
+    # MAX_ASPECT_RATIO (8.0) already excluding genuine thin banner/wordmark
+    # design elements before this is ever reached.
+    _STAMP_ASPECT_RATIO_MIN = 2.2
+    _STAMP_ASPECT_RATIO_MAX = 4.2
+
+    @staticmethod
+    def _classify_splice_shape(cw: int, ch: int, x: int, y: int) -> Tuple[str, str]:
+        """Returns (anomaly type, explanation) for a detected high-variance
+        boundary patch, based purely on its shape -- distinguishes a
+        stamp/seal-shaped patch from the generic edge-discontinuity catch-all
+        so the tamper report doesn't lump a forged stamp in with every other
+        kind of pasted patch under one unlabeled signal."""
+        aspect_ratio = max(cw, ch) / min(cw, ch)
+        if TamperForensics._STAMP_ASPECT_RATIO_MIN <= aspect_ratio <= TamperForensics._STAMP_ASPECT_RATIO_MAX:
+            return (
+                "stamp_forgery",
+                f"Patch at ({x}, {y}) has the proportions and high-frequency boundary "
+                f"signature of a pasted or altered stamp/seal, not a general document "
+                f"edit -- aspect ratio {aspect_ratio:.1f}:1."
+            )
+        return (
+            "edge_discontinuity",
+            f"High-frequency boundary discontinuity detected at coordinate ({x}, {y})."
+        )

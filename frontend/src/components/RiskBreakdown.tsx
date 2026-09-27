@@ -60,23 +60,14 @@ export const RiskBreakdown: React.FC<RiskBreakdownProps> = ({ breakdown, totalSc
                   ></div>
                 </div>
               )}
-
-              {item.top_signals && item.top_signals.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {item.top_signals.map((sig, sIdx) => (
-                    <span
-                      key={sIdx}
-                      className="text-[10px] px-1.5 py-0.2 rounded bg-graphite-950 text-graphite-400 border border-graphite-800"
-                    >
-                      {sig}
-                    </span>
-                  ))}
-                </div>
-              )}
             </div>
           );
         })}
       </div>
+
+      <p className="text-[10px] text-graphite-500 pt-1 border-t border-graphite-800/60">
+        See the Risk Reasons tab for the full itemized checks (pass and fail) behind these numbers.
+      </p>
     </ScrollReveal>
   );
 };

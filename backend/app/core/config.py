@@ -54,6 +54,20 @@ class Settings(BaseSettings):
     THRESHOLD_MEDIUM: int = 49
     THRESHOLD_HIGH: int = 74
     
+    # Tamper AI -- per-region forensic-CNN reporting threshold (see
+    # tamper_service.py's analyze(), which samples the portrait/center/mrz
+    # regions independently). This is a REPORTING cut point only -- it
+    # decides whether an individual region's CNN probability shows as its
+    # own PASS or FAIL risk-check entry. It does NOT change
+    # _aggregate_tamper_score's existing math, which still folds the raw
+    # max(region_probs) into the overall tamper_risk exactly as before.
+    # 0.5 is an unvalidated default, not a calibrated number -- there is no
+    # labeled forged-document set behind it (see tamper_cnn's own
+    # synthetic-only-training disclosure in SESSION_SUMMARY.md). Kept here,
+    # named, so it's trivially findable/tunable once real tampered-sample
+    # evaluation exists, instead of buried inline in tamper_service.py.
+    TAMPER_REGION_THRESHOLD: float = 0.5
+
     # OCR Settings
     OCR_ENGINE: str = "pytesseract"
     # Empty by default: ocr_service.py only overrides pytesseract's tesseract_cmd

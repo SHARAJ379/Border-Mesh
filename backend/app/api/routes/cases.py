@@ -2,14 +2,17 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from app.api.deps import get_db, require_officer_auth
-from app.models import Case, DocumentAnalysis, RiskSignal, AuditLog, FaceEmbeddingGallery
-from app.schemas import CaseOut, CaseDetailOut, OfficerDecisionRequest, RiskSignalOut, AuditLogOut, PurgeBiometricsResponse
+from app.models import Case, DocumentAnalysis, RiskCheck, AuditLog, FaceEmbeddingGallery
+from app.schemas import CaseOut, CaseDetailOut, OfficerDecisionRequest, RiskCheckOut, AuditLogOut, PurgeBiometricsResponse
 from app.services.audit_service import AuditService
 
 router = APIRouter(prefix="/cases", tags=["cases"])
+
+_SEVERITY_RANK = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+
 
 @router.get("", response_model=List[CaseOut])
 def list_cases(
@@ -30,6 +33,30 @@ def list_cases(
         query = query.filter(Case.country.ilike(f"%{country}%"))
 
     cases = query.order_by(desc(Case.created_at)).offset(offset).limit(limit).all()
+
+    # Attach a lightweight risk-check summary per case (see
+    # CaseOut.flagged_check_count/top_flagged_checks) -- one batched query
+    # for every case on this page rather than N+1 per-row queries, since
+    # the Review Queue needs "why is this flagged" beyond the bare badge
+    # without paying for the full itemized checks list per row.
+    case_ids = [c.id for c in cases]
+    if case_ids:
+        failed_checks = (
+            db.query(RiskCheck)
+            .filter(RiskCheck.case_id.in_(case_ids), RiskCheck.status == "FAIL")
+            .all()
+        )
+        by_case: Dict[str, List[RiskCheck]] = {}
+        for chk in failed_checks:
+            by_case.setdefault(chk.case_id, []).append(chk)
+        for c in cases:
+            case_failed = sorted(
+                by_case.get(c.id, []),
+                key=lambda chk: (_SEVERITY_RANK.get(chk.severity, 4), -chk.score_impact),
+            )
+            c.flagged_check_count = len(case_failed)
+            c.top_flagged_checks = [chk.label for chk in case_failed[:2]]
+
     return cases
 
 
@@ -52,11 +79,11 @@ def get_case(case_id: str, db: Session = Depends(get_db)):
     return case
 
 
-@router.get("/{case_id}/signals", response_model=List[RiskSignalOut])
-def get_case_signals(case_id: str, db: Session = Depends(get_db)):
-    """Returns all forensic risk signals generated for a specific case."""
-    signals = db.query(RiskSignal).filter(RiskSignal.case_id == case_id).all()
-    return signals
+@router.get("/{case_id}/checks", response_model=List[RiskCheckOut])
+def get_case_checks(case_id: str, db: Session = Depends(get_db)):
+    """Returns every itemized risk check (pass, fail, or note) recorded for a specific case."""
+    checks = db.query(RiskCheck).filter(RiskCheck.case_id == case_id).all()
+    return checks
 
 
 @router.get("/{case_id}/audit", response_model=List[AuditLogOut])

@@ -145,18 +145,20 @@ export const MRZValidator: React.FC<MRZValidatorProps> = ({ mrz, validation, doc
           </div>
 
           <div className="space-y-2">
-            {validation.rules_detail.map((rule, idx) => (
+            {validation.checks.map((check, idx) => (
               <div
                 key={idx}
                 className={`text-[11px] p-2.5 rounded-lg flex items-center justify-between transition-colors ${
-                  rule.passed
-                    ? 'bg-graphite-950/50 text-graphite-400 hover:bg-graphite-950/80'
-                    : 'bg-rose-950/40 border border-rose-900/60 text-rose-300 hover:bg-rose-950/50'
+                  check.status === 'FAIL'
+                    ? 'bg-rose-950/40 border border-rose-900/60 text-rose-300 hover:bg-rose-950/50'
+                    : 'bg-graphite-950/50 text-graphite-400 hover:bg-graphite-950/80'
                 }`}
               >
-                <span>{rule.explanation}</span>
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${rule.passed ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {rule.passed ? 'PASS' : 'FAIL'}
+                <span>{check.explanation}</span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                  check.status === 'FAIL' ? 'text-rose-400' : check.status === 'NOT_APPLICABLE' ? 'text-graphite-500' : 'text-emerald-400'
+                }`}>
+                  {check.status === 'NOT_APPLICABLE' ? 'N/A' : check.status}
                 </span>
               </div>
             ))}

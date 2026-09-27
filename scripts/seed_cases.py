@@ -12,7 +12,7 @@ sys.path.insert(0, str(backend_path))
 from app.core.config import settings
 from app.core.database import SessionLocal, Base, engine
 from app.core.encryption import encrypt_file_in_place
-from app.models import Case, DocumentAnalysis, RiskSignal, AuditLog
+from app.models import Case, DocumentAnalysis, AuditLog
 from app.services.audit_service import AuditService
 from app.core.security import hash_identifier
 from app.utils.synthetic_generator import SyntheticDocumentGenerator

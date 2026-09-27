@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 
 from app.api.deps import get_db
-from app.models import Case, DocumentAnalysis, RiskSignal, AuditLog
+from app.models import Case, DocumentAnalysis, RiskCheck, AuditLog
 from app.schemas import DashboardStatsOut, CaseOut
 from app.services.policy_service import get_policy
 
@@ -99,15 +99,19 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
 
     latency_breakdown = _compute_latency_breakdown(db)
 
-    # Top risk reasons
-    top_signals = (
-        db.query(RiskSignal.signal, func.count(RiskSignal.id).label("count"))
-        .group_by(RiskSignal.signal)
+    # Top risk reasons -- only FAIL-status checks are a "reason a document
+    # was flagged"; once PASS/INFO/NOT_APPLICABLE rows also live in this
+    # table (see RiskCheck), counting them here would bury real risk
+    # reasons under "MRZ Composite Checksum" appearing on every clean case.
+    top_checks = (
+        db.query(RiskCheck.label, func.count(RiskCheck.id).label("count"))
+        .filter(RiskCheck.status == "FAIL")
+        .group_by(RiskCheck.label)
         .order_by(desc("count"))
         .limit(6)
         .all()
     )
-    top_risk_reasons = [{"reason": s[0], "count": s[1]} for s in top_signals]
+    top_risk_reasons = [{"reason": s[0], "count": s[1]} for s in top_checks]
 
     # Recent cases
     recent_cases = db.query(Case).order_by(desc(Case.created_at)).limit(10).all()

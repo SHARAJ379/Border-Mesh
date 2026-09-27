@@ -2,7 +2,7 @@ import {
   DashboardStats,
   CaseItem,
   CaseDetail,
-  RiskSignal,
+  RiskCheck,
   AuditLog,
   OfficerDecision,
   ChainVerificationResult,
@@ -124,9 +124,9 @@ export const api = {
     return res.json();
   },
 
-  async getCaseSignals(caseId: string): Promise<RiskSignal[]> {
-    const res = await fetch(`${API_BASE}/cases/${caseId}/signals`);
-    if (!res.ok) throw new Error('Failed to fetch risk signals');
+  async getCaseChecks(caseId: string): Promise<RiskCheck[]> {
+    const res = await fetch(`${API_BASE}/cases/${caseId}/checks`);
+    if (!res.ok) throw new Error('Failed to fetch risk checks');
     return res.json();
   },
 

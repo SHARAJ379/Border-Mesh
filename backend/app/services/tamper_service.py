@@ -10,6 +10,7 @@ from PIL import Image
 
 from app.core.config import settings
 from app.ml.tamper_model import LightweightForensicCNN, TamperForensics
+from app.services.risk_types import RiskCheckStatus, RiskFactorKey, make_check, make_evidence
 
 class BaseTamperService(ABC):
     @abstractmethod
@@ -121,7 +122,8 @@ class TamperDetectionService(BaseTamperService):
                 "type": "photo_boundary_anomaly",
                 "confidence": 0.86,
                 "region": [int(w*0.05), int(h*0.15), int(w*0.40), int(h*0.60)],
-                "explanation": "Unusual edge density and high-gradient seam around portrait boundary. Potential photo replacement."
+                "explanation": "Unusual edge density and high-gradient seam around portrait boundary. Potential photo replacement.",
+                "edge_density": round(edge_density, 3),
             })
 
         return {
@@ -155,6 +157,10 @@ class TamperDetectionService(BaseTamperService):
                 "region": [0, int(h*0.75), w, int(h*0.25)],
                 "explanation": "Significant compression divergence between Machine Readable Zone and main document body."
             })
+        # ratio is returned unconditionally (not just when it fires) below,
+        # so the check built from it in analyze() can cite the real measured
+        # value even when it's clean -- see the "show why it's clean, not
+        # just silence" principle behind this whole schema.
 
         return {
             "is_anomaly": is_anomaly,
@@ -258,6 +264,33 @@ class TamperDetectionService(BaseTamperService):
 
         return {"signals": self._evaluate_exif_signals(exif, exif_ifd)}
 
+    # Uniform per-check score contribution for a heuristic tamper FAIL,
+    # scaled by that finding's own confidence -- preserves exactly the
+    # weighting risk_engine.py used to apply uniformly to every tamper
+    # signal regardless of type. This is a DISPLAY/evidence-list number:
+    # the TAMPER factor's actual weighted contribution to the total risk
+    # score still comes from tamper_risk (the calibrated aggregate below),
+    # not from summing these -- see risk_engine.py's own comment on why
+    # TAMPER (unlike MRZ_VALIDATION/CONSISTENCY) keeps its bespoke formula.
+    _CHECK_SCORE_IMPACT_PER_CONFIDENCE = 18.0
+
+    def _check_from_heuristic_signal(self, sig: Dict[str, Any], severity: str) -> Dict[str, Any]:
+        confidence = sig.get("confidence", 0.8)
+        region = sig.get("region") or None  # EXIF signals carry region: [] -- not a real locus, treat as none
+        evidence_kwargs: Dict[str, Any] = {"region": region, "region_source": "document" if region else None}
+        if "roi_variance" in sig:
+            evidence_kwargs.update(measured_value=sig["roi_variance"], threshold_value=1400, unit="roi_variance")
+        elif "edge_density" in sig:
+            evidence_kwargs.update(measured_value=sig["edge_density"], threshold_value=0.18, unit="edge_density")
+        return make_check(
+            id=f"TAMPER_{sig['type'].upper()}", category="TAMPER", factor=RiskFactorKey.TAMPER,
+            label=f"Forensic Anomaly ({sig['type'].replace('_', ' ').title()})",
+            status=RiskCheckStatus.FAIL, severity=severity, confidence=confidence,
+            explanation=sig.get("explanation", "Potential image texture or compression anomaly detected."),
+            evidence=make_evidence(**evidence_kwargs),
+            score_impact=round(confidence * self._CHECK_SCORE_IMPACT_PER_CONFIDENCE, 1),
+        )
+
     def analyze(self, image_path: str, case_id: str) -> Dict[str, Any]:
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"Document image not found: {image_path}")
@@ -267,19 +300,17 @@ class TamperDetectionService(BaseTamperService):
             raise ValueError(f"OpenCV cannot decode image: {image_path}")
 
         h, w = img_cv.shape[:2]
-        
+
         # Prepare heatmap destination
         heatmap_filename = f"{case_id}_tamper_heatmap.jpg"
         heatmap_full_path = os.path.join(settings.UPLOAD_DIR, "heatmaps", heatmap_filename)
-        
+
         # 1. Error Level Analysis (Signal A)
         mean_ela, ela_gray = TamperForensics.generate_ela(image_path, heatmap_full_path)
-        
-        signals: List[Dict[str, Any]] = []
-        visual_anomalies: List[Dict[str, Any]] = []
 
-        # Check ELA threshold
-        if mean_ela > 0.22:
+        signals: List[Dict[str, Any]] = []
+        ela_fired = mean_ela > 0.22
+        if ela_fired:
             signals.append({
                 "type": "compression_anomaly",
                 "confidence": min(0.92, round(mean_ela * 3.5, 2)),
@@ -289,46 +320,36 @@ class TamperDetectionService(BaseTamperService):
 
         # 2. Boundary / edge splicing (Signal B)
         splicing_anomalies = TamperForensics.detect_splicing_boundaries(img_cv)
-        for anom in splicing_anomalies:
-            signals.append(anom)
-            visual_anomalies.append({
-                "label": "Potential Spliced Patch",
-                "region": anom["region"],
-                "confidence": anom["confidence"]
-            })
+        signals.extend(splicing_anomalies)
 
         # 3. Portrait photo boundary (Signal C)
         portrait_res = self.analyze_portrait_region(img_cv)
-        for sig in portrait_res["signals"]:
-            signals.append(sig)
-            visual_anomalies.append({
-                "label": "Suspicious Portrait Seam",
-                "region": sig["region"],
-                "confidence": sig["confidence"]
-            })
+        signals.extend(portrait_res["signals"])
 
         # 4. Text region recompression (Signal D)
         text_res = self.analyze_text_compression(img_cv, ela_gray)
-        for sig in text_res["signals"]:
-            signals.append(sig)
+        signals.extend(text_res["signals"])
 
         # 5. Patch-level CNN feature scoring (only once a trained checkpoint is
         # loaded -- see __init__). Sample multiple document regions rather than
         # just the center: the portrait and MRZ zones are where photo-splice
         # and text tampering actually occur, and a center-only patch mostly
-        # never overlaps either.
-        cnn_tamper_prob = None
+        # never overlaps either. Each region's own probability is kept (not
+        # just the max) so it can become its own PASS/FAIL check with its
+        # own region box -- previously the per-region detail was computed
+        # and immediately discarded, leaving the CNN's single most
+        # model-driven finding invisible to the officer.
+        cnn_regions = [
+            ("portrait", (int(h*0.15), int(h*0.75), int(w*0.05), int(w*0.45))),
+            ("center", (h//2 - 64, h//2 + 64, w//2 - 64, w//2 + 64)),
+            ("mrz", (int(h*0.75), h, 0, w)),
+        ]
+        cnn_region_results: List[Dict[str, Any]] = []
         if self.cnn_ready:
-            regions = [
-                ("portrait", (int(h*0.15), int(h*0.75), int(w*0.05), int(w*0.45))),
-                ("center", (h//2 - 64, h//2 + 64, w//2 - 64, w//2 + 64)),
-                ("mrz", (int(h*0.75), h, 0, w)),
-            ]
-            region_probs = []
-            for _, (y1, y2, x1, x2) in regions:
-                y1, y2 = max(0, y1), min(h, y2)
-                x1, x2 = max(0, x1), min(w, x2)
-                patch = img_cv[y1:y2, x1:x2]
+            for region_name, (y1, y2, x1, x2) in cnn_regions:
+                y1c, y2c = max(0, y1), min(h, y2)
+                x1c, x2c = max(0, x1), min(w, x2)
+                patch = img_cv[y1c:y2c, x1c:x2c]
                 if patch.size == 0:
                     continue
                 patch_rgb = cv2.cvtColor(patch, cv2.COLOR_BGR2RGB)
@@ -337,9 +358,12 @@ class TamperDetectionService(BaseTamperService):
                 with torch.no_grad():
                     cnn_out = self.model(patch_t)
                     probs = torch.softmax(cnn_out, dim=1).squeeze().numpy()
-                    region_probs.append(float(probs[1]))
-            if region_probs:
-                cnn_tamper_prob = max(region_probs)
+                cnn_region_results.append({
+                    "region_name": region_name,
+                    "probability": float(probs[1]),
+                    "region": [int(x1c), int(y1c), int(x2c - x1c), int(y2c - y1c)],
+                })
+        cnn_tamper_prob = max((r["probability"] for r in cnn_region_results), default=None)
 
         # 6. EXIF metadata analysis (Signal E) -- the one signal here that
         # inspects the file's own embedded metadata rather than pixel
@@ -356,12 +380,128 @@ class TamperDetectionService(BaseTamperService):
         else:
             risk_level = "LOW"
 
+        # --- Build the unified itemized checks list -----------------------
+        #
+        # Per-signal severity escalates to CRITICAL when the document-level
+        # tamper verdict itself is CRITICAL (a highly-confident forgery
+        # finding should be able to trigger the same hard-stop floor as an
+        # expired document, rather than being capped at HIGH and diluted by
+        # unrelated clean signals) -- this can only be decided now that
+        # tamper_risk/risk_level are known, after the heuristics above ran.
+        def severity_for(confidence: float) -> str:
+            if risk_level == "CRITICAL":
+                return "CRITICAL"
+            return "HIGH" if confidence > 0.85 else "MEDIUM"
+
+        checks: List[Dict[str, Any]] = []
+
+        # ELA
+        ela_evidence = make_evidence(measured_value=round(mean_ela, 3), threshold_value=0.22, unit="ela_mean_error")
+        if ela_fired:
+            ela_sig = signals[0]  # always appended first, above, when ela_fired
+            checks.append(make_check(
+                id="TAMPER_ELA", category="TAMPER", factor=RiskFactorKey.TAMPER,
+                label="Error Level Analysis", status=RiskCheckStatus.FAIL,
+                severity=severity_for(ela_sig["confidence"]), confidence=ela_sig["confidence"],
+                explanation=ela_sig["explanation"], evidence=ela_evidence,
+                score_impact=round(ela_sig["confidence"] * self._CHECK_SCORE_IMPACT_PER_CONFIDENCE, 1),
+            ))
+        else:
+            checks.append(make_check(
+                id="TAMPER_ELA", category="TAMPER", factor=RiskFactorKey.TAMPER,
+                label="Error Level Analysis", status=RiskCheckStatus.PASS, confidence=0.9,
+                explanation="No significant multi-layer JPEG recompression artifacts detected.",
+                evidence=ela_evidence,
+            ))
+
+        # Splicing / edge discontinuity
+        if splicing_anomalies:
+            for anom in splicing_anomalies:
+                checks.append(self._check_from_heuristic_signal(anom, severity_for(anom["confidence"])))
+        else:
+            checks.append(make_check(
+                id="TAMPER_EDGE_DISCONTINUITY", category="TAMPER", factor=RiskFactorKey.TAMPER,
+                label="Boundary / Edge Splicing Scan", status=RiskCheckStatus.PASS, confidence=0.85,
+                explanation="No unnatural edge discontinuities or pasted-patch boundaries detected.",
+            ))
+
+        # Portrait boundary
+        if portrait_res["signals"]:
+            for sig in portrait_res["signals"]:
+                checks.append(self._check_from_heuristic_signal(sig, severity_for(sig["confidence"])))
+        else:
+            checks.append(make_check(
+                id="TAMPER_PHOTO_BOUNDARY_ANOMALY", category="TAMPER", factor=RiskFactorKey.TAMPER,
+                label="Portrait Boundary Scan", status=RiskCheckStatus.PASS, confidence=0.85,
+                explanation="No suspicious seam or edge-density anomaly detected around the portrait boundary.",
+            ))
+
+        # Text/MRZ compression consistency -- ratio is cited whether or not
+        # it fired, so a clean result states the real measured ratio instead
+        # of silence.
+        text_evidence = make_evidence(measured_value=round(text_res["ratio"], 3), threshold_value=0.85, unit="mrz_body_compression_ratio")
+        if text_res["signals"]:
+            sig = text_res["signals"][0]
+            checks.append(make_check(
+                id="TAMPER_TEXT_COMPRESSION_ANOMALY", category="TAMPER", factor=RiskFactorKey.TAMPER,
+                label="Text/MRZ Compression Consistency", status=RiskCheckStatus.FAIL,
+                severity=severity_for(sig["confidence"]), confidence=sig["confidence"],
+                explanation=sig["explanation"], evidence=text_evidence,
+                score_impact=round(sig["confidence"] * self._CHECK_SCORE_IMPACT_PER_CONFIDENCE, 1),
+            ))
+        else:
+            checks.append(make_check(
+                id="TAMPER_TEXT_COMPRESSION_ANOMALY", category="TAMPER", factor=RiskFactorKey.TAMPER,
+                label="Text/MRZ Compression Consistency", status=RiskCheckStatus.PASS, confidence=0.8,
+                explanation="Machine Readable Zone and main document body show consistent compression levels.",
+                evidence=text_evidence,
+            ))
+
+        # CNN per-region forgery probability -- the priority addition: each
+        # sampled region becomes its OWN check with its own region box, not
+        # a single opaque max() folded silently into the aggregate score.
+        if self.cnn_ready:
+            for r in cnn_region_results:
+                is_fail = r["probability"] >= settings.TAMPER_REGION_THRESHOLD
+                evidence = make_evidence(
+                    measured_value=round(r["probability"], 3),
+                    threshold_value=settings.TAMPER_REGION_THRESHOLD,
+                    unit="tamper_probability",
+                    region=r["region"], region_source="document",
+                )
+                checks.append(make_check(
+                    id=f"TAMPER_CNN_{r['region_name'].upper()}_REGION", category="TAMPER", factor=RiskFactorKey.TAMPER,
+                    label=f"Forensic CNN — {r['region_name'].title()} Region",
+                    status=RiskCheckStatus.FAIL if is_fail else RiskCheckStatus.PASS,
+                    severity=severity_for(r["probability"]) if is_fail else None,
+                    confidence=r["probability"] if is_fail else (1.0 - r["probability"]),
+                    explanation=(
+                        f"Trained forensic CNN classified the {r['region_name']} region as tampered with "
+                        f"{round(r['probability'] * 100, 1)}% probability."
+                        if is_fail else
+                        f"Trained forensic CNN found no tampering indicators in the {r['region_name']} region "
+                        f"({round(r['probability'] * 100, 1)}% probability)."
+                    ),
+                    evidence=evidence,
+                    score_impact=round(r["probability"] * self._CHECK_SCORE_IMPACT_PER_CONFIDENCE, 1) if is_fail else 0.0,
+                ))
+
+        # EXIF metadata
+        if exif_res["signals"]:
+            for sig in exif_res["signals"]:
+                checks.append(self._check_from_heuristic_signal(sig, severity_for(sig["confidence"])))
+        else:
+            checks.append(make_check(
+                id="TAMPER_EXIF_METADATA", category="TAMPER", factor=RiskFactorKey.TAMPER,
+                label="EXIF Metadata Consistency", status=RiskCheckStatus.PASS, confidence=0.8,
+                explanation="Embedded EXIF metadata is consistent with a genuine, unedited capture.",
+            ))
+
         return {
             "tamper_risk": tamper_risk,
             "risk_level": risk_level,
-            "signals": signals,
+            "checks": checks,
             "heatmap_url": f"/uploads/heatmaps/{heatmap_filename}",
-            "visual_anomalies": visual_anomalies
         }
 
 def get_tamper_service() -> BaseTamperService:

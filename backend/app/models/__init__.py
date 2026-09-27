@@ -28,7 +28,7 @@ class Case(Base):
 
     # Relationships
     analyses = relationship("DocumentAnalysis", back_populates="case", cascade="all, delete-orphan")
-    risk_signals = relationship("RiskSignal", back_populates="case", cascade="all, delete-orphan")
+    risk_checks = relationship("RiskCheck", back_populates="case", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="case", cascade="all, delete-orphan")
     gallery_entries = relationship("FaceEmbeddingGallery", back_populates="case", cascade="all, delete-orphan")
 
@@ -56,20 +56,39 @@ class DocumentAnalysis(Base):
     case = relationship("Case", back_populates="analyses")
 
 
-class RiskSignal(Base):
-    __tablename__ = "risk_signals"
+class RiskCheck(Base):
+    """
+    One itemized entry in the "risk reasons" model -- a single check that
+    ran (a rule, a forensic heuristic, a biometric comparison, a watchlist
+    query) and what it found, whether it passed, failed, or is a non-
+    blocking note. Renamed from the old RiskSignal, which only ever stored
+    FAILURES -- this table now holds every check regardless of outcome
+    (status PASS/FAIL/INFO/NOT_APPLICABLE), so a clean case's evidentiary
+    trail is "23 checks ran, all passed" rather than an empty table.
+    """
+    __tablename__ = "risk_checks"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     case_id = Column(String(36), ForeignKey("cases.id", ondelete="CASCADE"), nullable=False, index=True)
-    
-    module = Column(String(64), nullable=False) # OCR, MRZ, VALIDATION, TAMPER, FACE, WATCHLIST
-    signal = Column(String(128), nullable=False)
-    severity = Column(String(32), default="LOW") # LOW, MEDIUM, HIGH, CRITICAL
+
+    # Stable machine key (e.g. "TAMPER_CNN_PORTRAIT_REGION") -- survives
+    # re-runs of the same case, used for correlation/testing, never shown
+    # raw in the UI (that's `label`).
+    check_key = Column(String(128), nullable=False)
+    category = Column(String(64), nullable=False)  # OCR, MRZ, VALIDATION, TAMPER, FACE, WATCHLIST, IDENTITY
+    factor = Column(String(64), nullable=True)      # RiskFactorKey -- which weighted breakdown row this rolls into
+    label = Column(String(128), nullable=False)
+    status = Column(String(32), nullable=False, default="FAIL")  # PASS, FAIL, INFO, NOT_APPLICABLE
+    severity = Column(String(32), nullable=True)  # LOW, MEDIUM, HIGH, CRITICAL -- only set when status == FAIL
     confidence = Column(Float, default=0.95)
     explanation = Column(Text, nullable=False)
+    # The structured, non-prose half of this check's evidence (measured
+    # value vs. threshold, unit, an optional region/region_source bounding
+    # box, an optional fuzzy-match detail) -- see app.services.risk_types.
+    evidence = Column(JSON, nullable=True)
     score_impact = Column(Float, default=0.0)
 
-    case = relationship("Case", back_populates="risk_signals")
+    case = relationship("Case", back_populates="risk_checks")
 
 
 class AuditLog(Base):
@@ -78,7 +97,7 @@ class AuditLog(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     case_id = Column(String(36), ForeignKey("cases.id", ondelete="CASCADE"), nullable=True, index=True)
     
-    action = Column(String(128), nullable=False) # DOCUMENT_UPLOADED, OCR_COMPLETED, MRZ_VALIDATED, TAMPER_ANALYSIS_COMPLETED, FACE_VERIFIED, RISK_CALCULATED, CASE_VIEWED, OFFICER_DECISION_RECORDED, BIOMETRICS_PURGED
+    action = Column(String(128), nullable=False) # DOCUMENT_UPLOADED, OCR_COMPLETED, MRZ_VALIDATED, TAMPER_ANALYSIS_COMPLETED, FACE_VERIFIED, WATCHLIST_HIT, RISK_CALCULATED, CASE_VIEWED, OFFICER_DECISION_RECORDED, BIOMETRICS_PURGED
     actor = Column(String(128), default="OFFICER-DEMO-01")
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
     metadata_json = Column(JSON, nullable=True)
@@ -157,6 +176,35 @@ class FaceEmbeddingGallery(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     case = relationship("Case", back_populates="gallery_entries")
+
+
+class WatchlistEntry(Base):
+    """
+    DB-backed watchlist records, queried by WatchlistProvider on every
+    screening's risk step (see app.services.watchlist_service). Replaces
+    what used to be a hardcoded Python list baked into the provider class
+    itself -- entries can now be added/removed/audited as real rows
+    without a code change and redeploy, the same way every other piece of
+    case data in this app lives in the DB rather than in source.
+
+    This does NOT make the underlying data any less simulated: every
+    seeded row (see scripts/seed_cases.py) is still fictional, and this
+    table is not connected to, and has no path to become, any real
+    government or law-enforcement watchlist -- see LABEL below and the
+    DPDP compliance dashboard's own disclosure. What changes is only the
+    storage/management model, not the data's authenticity.
+    """
+    __tablename__ = "watchlist_entries"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    watchlist_id = Column(String(64), unique=True, nullable=False, index=True)
+    name = Column(String(255), nullable=False, index=True)
+    document_number = Column(String(64), nullable=False, index=True)
+    category = Column(String(128), nullable=False)
+    reason = Column(Text, nullable=False)
+    severity = Column(String(32), default="HIGH")  # LOW, MEDIUM, HIGH, CRITICAL
+    active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class PolicySettings(Base):

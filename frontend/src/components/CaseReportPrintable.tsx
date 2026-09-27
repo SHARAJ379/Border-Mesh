@@ -223,32 +223,39 @@ export const CaseReportPrintable: React.FC<CaseReportPrintableProps> = ({
         <SectionTitle index="02" title="Forensic Tamper Analysis" />
         {tamper ? (
           <>
-            <div style={{ display: 'flex', gap: 16, marginBottom: 10 }}>
-              <Field label="Tamper Risk" value={`${Math.round(tamper.tamper_risk * 100)}%`} />
-              <Field label="Risk Level" value={tamper.risk_level} />
-              <Field label="Signals Detected" value={String(tamper.signals?.length ?? 0)} />
-            </div>
-            {tamper.signals && tamper.signals.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {tamper.signals.slice(0, 4).map((sig, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      fontSize: 10.5,
-                      padding: '6px 10px',
-                      border: '1px solid #FED7AA',
-                      background: '#FFF7ED',
-                      borderRadius: 5,
-                      color: '#9A3412'
-                    }}
-                  >
-                    <strong style={{ textTransform: 'capitalize' }}>{sig.type.replace(/_/g, ' ')}</strong> — {Math.round(sig.confidence * 100)}% confidence. {sig.explanation}
+            {(() => {
+              const flaggedChecks = (tamper.checks || []).filter((c) => c.status === 'FAIL');
+              return (
+                <>
+                  <div style={{ display: 'flex', gap: 16, marginBottom: 10 }}>
+                    <Field label="Tamper Risk" value={`${Math.round(tamper.tamper_risk * 100)}%`} />
+                    <Field label="Risk Level" value={tamper.risk_level} />
+                    <Field label="Checks Flagged" value={String(flaggedChecks.length)} />
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ fontSize: 11, color: '#047857' }}>No significant image manipulation detected.</div>
-            )}
+                  {flaggedChecks.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {flaggedChecks.slice(0, 4).map((c, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            fontSize: 10.5,
+                            padding: '6px 10px',
+                            border: '1px solid #FED7AA',
+                            background: '#FFF7ED',
+                            borderRadius: 5,
+                            color: '#9A3412'
+                          }}
+                        >
+                          <strong>{c.label}</strong> — {Math.round(c.confidence * 100)}% confidence. {c.explanation}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 11, color: '#047857' }}>No significant image manipulation detected.</div>
+                  )}
+                </>
+              );
+            })()}
           </>
         ) : (
           <div style={{ fontSize: 11, color: '#94A3B8' }}>No tamper forensic analysis conducted.</div>

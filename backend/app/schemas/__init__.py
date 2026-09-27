@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 # --- Audit Schemas ---
@@ -70,93 +70,50 @@ class PurgeBiometricsResponse(BaseModel):
     audit_hash: str
 
 
-# --- Risk Signal Schemas ---
-class RiskSignalOut(BaseModel):
+# --- Risk Check Schemas (the itemized "risk reasons" model) ---
+class MatchEvidenceOut(BaseModel):
+    """How a fuzzy/phonetic string-matching check judged two tokens
+    equivalent -- exposed so an officer can see WHY it matched, not just
+    that it did."""
+    method: str  # EXACT, EDIT_DISTANCE, SOUNDEX, METAPHONE
+    query_token: str
+    matched_token: str
+    edit_distance: Optional[int] = None
+
+class RiskCheckEvidenceOut(BaseModel):
+    measured_value: Optional[Union[float, int, str, bool]] = None
+    threshold_value: Optional[Union[float, int, str, bool]] = None
+    unit: Optional[str] = None
+    region: Optional[List[int]] = None  # [x, y, w, h] in the source image's own pixel coordinates
+    region_source: Optional[str] = None  # "document" | "live_capture"
+    match: Optional[List[MatchEvidenceOut]] = None
+
+class RiskCheckOut(BaseModel):
     id: Optional[str] = None
     case_id: Optional[str] = None
-    module: str
-    signal: str
-    severity: str # LOW, MEDIUM, HIGH, CRITICAL
+    check_key: Optional[str] = None
+    category: str  # OCR, MRZ, VALIDATION, TAMPER, FACE, WATCHLIST, IDENTITY
+    factor: Optional[str] = None  # RiskFactorKey -- which weighted breakdown row this rolls into
+    label: str
+    status: str  # PASS, FAIL, INFO, NOT_APPLICABLE
+    severity: Optional[str] = None  # LOW, MEDIUM, HIGH, CRITICAL -- only set when status == FAIL
     confidence: float
     explanation: str
+    evidence: Optional[RiskCheckEvidenceOut] = None
     score_impact: float = 0.0
 
     model_config = ConfigDict(from_attributes=True)
 
 
-# --- Sub-Module Analysis Result Schemas ---
-class OCRFieldItem(BaseModel):
-    value: str
-    confidence: float
-
-class OCRResultOut(BaseModel):
-    raw_text: str
-    fields: Dict[str, Any]
-    confidence: float
-    detected_lines: List[str] = []
-
-class MRZChecksumDetail(BaseModel):
-    field: str
-    value: str
-    check_digit: str
-    calculated_check_digit: str
-    valid: bool
-
-class MRZResultOut(BaseModel):
-    format: str # TD3, TD1, TD2, NONE
-    line1: str
-    line2: str
-    line3: Optional[str] = None
-    document_type: str
-    country: str
-    surname: str
-    given_names: str
-    document_number: str
-    nationality: str
-    birth_date: str # YYMMDD
-    sex: str
-    expiry_date: str # YYMMDD
-    optional_data: Optional[str] = None
-    checksums: List[MRZChecksumDetail]
-    is_valid: bool
-
-class RuleValidationItem(BaseModel):
-    rule: str
-    passed: bool
-    severity: str # LOW, MEDIUM, HIGH, CRITICAL
-    explanation: str
-    confidence: float
-
-class ValidationResultOut(BaseModel):
-    passed_count: int
-    failed_count: int
-    rules_detail: List[RuleValidationItem]
-
-class TamperSignalItem(BaseModel):
-    type: str # compression_anomaly, edge_discontinuity, photo_boundary_anomaly, text_compression_anomaly, exif_metadata_missing, exif_editing_software, exif_date_inconsistency
-    confidence: float
-    region: List[int] = [] # [x, y, w, h]
-    explanation: str
-
-class TamperResultOut(BaseModel):
-    tamper_risk: float # 0.0 to 1.0
-    risk_level: str # LOW, MEDIUM, HIGH, CRITICAL
-    signals: List[TamperSignalItem]
-    heatmap_url: Optional[str] = None
-    visual_anomalies: List[Dict[str, Any]] = []
-
-class FaceVerificationOut(BaseModel):
-    similarity: float
-    status: str # MATCH, REVIEW_REQUIRED, NO_FACE_DETECTED, MULTIPLE_FACES
-    document_face_url: Optional[str] = None
-    live_face_url: Optional[str] = None
-    quality_checks: Dict[str, Any] = {}
-    # A coarse HEURISTIC INDICATOR (blur/brightness quality plus an FFT-based
-    # moire/halftone signal, see FaceDetectorAndVerifier.check_quality) --
-    # NOT a certified Presentation Attack Detection (PAD) score. No ISO/IEC
-    # 30107-3 conformant liveness testing has been done on this pipeline.
-    anti_spoofing_score: float = 0.95
-    match_threshold: float = 0.72
+# Note: the old OCRFieldItem/OCRResultOut/MRZChecksumDetail/MRZResultOut/
+# RuleValidationItem/ValidationResultOut/TamperSignalItem/TamperResultOut/
+# FaceVerificationOut/RiskEngineResult schemas were never actually wired as
+# a response_model anywhere (confirmed by search) -- DocumentAnalysisOut's
+# ocr_result/mrz_result/validation_result/tamper_result/face_result fields
+# below have always been the loosely-typed Dict[str, Any] passthrough that
+# actually serves the frontend. Removed as dead schema clutter rather than
+# updated to match the new checks-based shape, since updating dead code
+# only to keep it dead isn't worth the surface area.
 
 
 # --- Full Risk Breakdown ---
@@ -174,14 +131,10 @@ class RiskFactorBreakdown(BaseModel):
     weight: Optional[float] = None
     raw_risk: Optional[float] = None
     weighted_contribution: float
-    top_signals: List[str]
-
-class RiskEngineResult(BaseModel):
-    risk_score: float # 0 to 100
-    risk_level: str # LOW, MEDIUM, HIGH, CRITICAL
-    recommendation: str
-    breakdown: List[RiskFactorBreakdown]
-    signals: List[RiskSignalOut]
+    # top_signals: List[str] -- REMOVED. Superseded by RiskCheckOut.factor:
+    # the frontend groups the full checks list by factor key directly
+    # instead of re-matching a truncated name list back to it by string
+    # equality.
 
 
 # --- Case Schemas ---
@@ -228,12 +181,18 @@ class CaseOut(BaseModel):
     officer_decision: str
     officer_notes: Optional[str] = None
     biometrics_purged: bool = False
+    # Lightweight risk-check summary for list views (Review Queue) that
+    # can't afford the full itemized checks list per row -- computed
+    # server-side in cases.py's list_cases. Full detail lives in
+    # CaseDetailOut.risk_checks.
+    flagged_check_count: int = 0
+    top_flagged_checks: List[str] = []
 
     model_config = ConfigDict(from_attributes=True)
 
 class CaseDetailOut(CaseOut):
     analyses: List[DocumentAnalysisOut] = []
-    risk_signals: List[RiskSignalOut] = []
+    risk_checks: List[RiskCheckOut] = []
     audit_logs: List[AuditLogOut] = []
 
 

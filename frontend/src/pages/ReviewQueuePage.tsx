@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { CaseItem } from '../types';
+import { CaseItem, RiskCheck } from '../types';
 import { api } from '../services/api';
 import { RiskBadge } from '../components/RiskBadge';
+import { RiskReasons } from '../components/RiskReasons';
 import { ScrollShadowX } from '../components/ScrollShadowX';
-import { Inbox, Search, ChevronRight, Loader2 } from 'lucide-react';
+import { Inbox, Search, ChevronRight, ChevronDown, Loader2 } from 'lucide-react';
 import { SectionHeading } from '../components/SectionHeading';
 import { ScrollReveal } from '../components/ScrollReveal';
 
@@ -36,6 +37,8 @@ export const ReviewQueuePage: React.FC<ReviewQueuePageProps> = ({ onSelectCase }
   const [loading, setLoading] = useState(true);
   const [filterLevel, setFilterLevel] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [expandedCaseId, setExpandedCaseId] = useState<string | null>(null);
+  const [checksByCase, setChecksByCase] = useState<Record<string, RiskCheck[] | 'loading' | 'error'>>({});
 
   useEffect(() => {
     fetchQueue();
@@ -69,6 +72,24 @@ export const ReviewQueuePage: React.FC<ReviewQueuePageProps> = ({ onSelectCase }
 
     return matchesFilter && matchesSearch;
   });
+
+  const toggleExpand = async (caseId: string) => {
+    if (expandedCaseId === caseId) {
+      setExpandedCaseId(null);
+      return;
+    }
+    setExpandedCaseId(caseId);
+    if (!checksByCase[caseId]) {
+      setChecksByCase((prev) => ({ ...prev, [caseId]: 'loading' }));
+      try {
+        const checks = await api.getCaseChecks(caseId);
+        setChecksByCase((prev) => ({ ...prev, [caseId]: checks }));
+      } catch (err) {
+        console.error('Failed to load risk checks for', caseId, err);
+        setChecksByCase((prev) => ({ ...prev, [caseId]: 'error' }));
+      }
+    }
+  };
 
   return (
     <div className="space-y-7">
@@ -139,43 +160,77 @@ export const ReviewQueuePage: React.FC<ReviewQueuePageProps> = ({ onSelectCase }
                 </tr>
               </thead>
               <tbody className="divide-y divide-graphite-800/40">
-                {filtered.map((c) => (
-                  <tr
-                    key={c.id}
-                    onClick={() => onSelectCase(c.id)}
-                    className="hover:bg-graphite-800/40 cursor-pointer transition-colors duration-150"
-                  >
-                    <td className="px-4 py-3.5 font-mono font-semibold text-brass-300">
-                      {c.case_number}
-                    </td>
-                    <td className="px-4 py-3.5 text-graphite-300">
-                      {c.country}
-                    </td>
-                    <td className="px-4 py-3.5 text-graphite-400">
-                      {c.document_type}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-graphite-200 tabular-nums">
-                          {Math.round(c.risk_score)}
-                        </span>
-                        <RiskBadge level={c.risk_level} size="sm" />
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5 text-graphite-400 truncate max-w-xs">
-                      {c.recommendation}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <RiskBadge status={c.officer_decision} size="sm" />
-                    </td>
-                    <td className="px-4 py-3.5 text-right pr-4">
-                      <button className="text-brass-400 hover:text-brass-200 font-semibold flex items-center gap-1 ml-auto transition-colors">
-                        <span>Inspect</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {filtered.map((c) => {
+                  const isExpanded = expandedCaseId === c.id;
+                  const checksState = checksByCase[c.id];
+                  return (
+                  <React.Fragment key={c.id}>
+                    <tr
+                      onClick={() => onSelectCase(c.id)}
+                      className="hover:bg-graphite-800/40 cursor-pointer transition-colors duration-150"
+                    >
+                      <td className="px-4 py-3.5 font-mono font-semibold text-brass-300">
+                        {c.case_number}
+                      </td>
+                      <td className="px-4 py-3.5 text-graphite-300">
+                        {c.country}
+                      </td>
+                      <td className="px-4 py-3.5 text-graphite-400">
+                        {c.document_type}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-graphite-200 tabular-nums">
+                            {Math.round(c.risk_score)}
+                          </span>
+                          <RiskBadge level={c.risk_level} size="sm" />
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 text-graphite-400 max-w-xs">
+                        <div className="truncate">{c.recommendation}</div>
+                        {/* Why this case is flagged, right in the queue -- not
+                            just a badge. See RiskReasons for the full detail
+                            behind this summary. */}
+                        {(c.flagged_check_count ?? 0) > 0 && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); toggleExpand(c.id); }}
+                            className="mt-1 flex items-center gap-1 text-[10px] text-rose-400/90 hover:text-rose-300 cursor-pointer"
+                          >
+                            <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                            <span className="truncate">
+                              {c.flagged_check_count} flagged{c.top_flagged_checks?.length ? `: ${c.top_flagged_checks.join(', ')}` : ''}
+                            </span>
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <RiskBadge status={c.officer_decision} size="sm" />
+                      </td>
+                      <td className="px-4 py-3.5 text-right pr-4">
+                        <button className="text-brass-400 hover:text-brass-200 font-semibold flex items-center gap-1 ml-auto transition-colors">
+                          <span>Inspect</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr onClick={(e) => e.stopPropagation()} className="bg-graphite-950/60 cursor-default">
+                        <td colSpan={7} className="px-4 py-4">
+                          {checksState === 'loading' && (
+                            <div className="flex items-center gap-2 text-xs text-graphite-400">
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading risk checks…
+                            </div>
+                          )}
+                          {checksState === 'error' && (
+                            <p className="text-xs text-rose-400">Failed to load risk checks for this case.</p>
+                          )}
+                          {Array.isArray(checksState) && <RiskReasons checks={checksState} compact />}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </ScrollShadowX>

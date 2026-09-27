@@ -117,8 +117,8 @@ def test_pan_card_demo_scenario_runs_clean_through_the_full_pipeline():
     assert analysis["ocr_result"]["fields"]["document_type"] == "PAN"
     assert analysis["mrz_result"] is None
 
-    pan_rule = [r for r in analysis["validation_result"]["rules_detail"] if r["rule"] == "PAN_FORMAT_VALIDATION"][0]
-    assert pan_rule["passed"] is True
+    pan_rule = [r for r in analysis["validation_result"]["checks"] if r["id"] == "PAN_FORMAT_VALIDATION"][0]
+    assert pan_rule["status"] == "PASS"
     assert "Individual" in pan_rule["explanation"]
 
 def test_driving_license_expired_demo_scenario_is_flagged_critical():
@@ -143,9 +143,9 @@ def test_driving_license_expired_demo_scenario_is_flagged_critical():
     analysis = detail["analyses"][0]
     assert analysis["mrz_result"] is None
 
-    expiry_rule = [r for r in analysis["validation_result"]["rules_detail"] if r["rule"] == "DOCUMENT_EXPIRATION"][0]
-    assert expiry_rule["passed"] is False
-    assert any(s["signal"] == "Document Expired" for s in detail["risk_signals"])
+    expiry_rule = [r for r in analysis["validation_result"]["checks"] if r["id"] == "DOCUMENT_EXPIRATION"][0]
+    assert expiry_rule["status"] == "FAIL"
+    assert any(c["label"] == "Document Expired" for c in detail["risk_checks"])
 
 def test_voter_id_demo_scenario_runs_clean_through_the_full_pipeline():
     """
@@ -165,8 +165,8 @@ def test_voter_id_demo_scenario_runs_clean_through_the_full_pipeline():
     assert analysis["ocr_result"]["fields"]["document_type"] == "VOTER_ID"
     assert analysis["mrz_result"] is None
 
-    voter_id_rule = [r for r in analysis["validation_result"]["rules_detail"] if r["rule"] == "VOTER_ID_FORMAT_VALIDATION"][0]
-    assert voter_id_rule["passed"] is True
+    voter_id_rule = [r for r in analysis["validation_result"]["checks"] if r["id"] == "VOTER_ID_FORMAT_VALIDATION"][0]
+    assert voter_id_rule["status"] == "PASS"
 
 
 def test_visa_stay_duration_expired_demo_scenario_is_flagged_critical():
@@ -189,9 +189,35 @@ def test_visa_stay_duration_expired_demo_scenario_is_flagged_critical():
     assert analysis["ocr_result"]["fields"]["document_type"] == "VISA"
     assert analysis["mrz_result"] is None
 
-    visa_rule = [r for r in analysis["validation_result"]["rules_detail"] if r["rule"] == "VISA_STAY_DURATION_VALIDATION"][0]
-    assert visa_rule["passed"] is False
-    assert any(s["signal"] == "Visa Stay Duration Expired" for s in detail["risk_signals"])
+    visa_rule = [r for r in analysis["validation_result"]["checks"] if r["id"] == "VISA_STAY_DURATION_VALIDATION"][0]
+    assert visa_rule["status"] == "FAIL"
+    assert any(c["label"] == "Visa Stay Duration Expired" for c in detail["risk_checks"])
+
+
+def test_permit_expired_demo_scenario_is_flagged_critical():
+    """
+    A Permit has no ICAO MRZ modeled either (extract-only, same posture as
+    Visa/Aadhaar). Its printed expiry hooks into the existing generic
+    DOCUMENT_EXPIRATION rule (rules_engine.py) the same way a Driving
+    Licence's does -- not a dedicated PERMIT_EXPIRATION rule, which would
+    double-count the same date. An expired permit must still be caught the
+    same way an expired passport/DL already is, via the same
+    CRITICAL-floors-to-at-least-HIGH mechanism.
+    """
+    response = client.post("/api/demo/scenario", json={"scenario_key": "permit"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["risk_level"] in ("HIGH", "CRITICAL")
+
+    detail = client.get(f"/api/cases/{data['case_id']}").json()
+    assert detail["document_type"] == "Permit"
+    analysis = detail["analyses"][0]
+    assert analysis["ocr_result"]["fields"]["document_type"] == "PERMIT"
+    assert analysis["mrz_result"] is None
+
+    expiry_rule = [r for r in analysis["validation_result"]["checks"] if r["id"] == "DOCUMENT_EXPIRATION"][0]
+    assert expiry_rule["status"] == "FAIL"
+    assert any(c["label"] == "Document Expired" for c in detail["risk_checks"])
 
 
 def test_duplicate_identity_demo_scenario_flags_a_high_severity_corroborating_signal():
@@ -216,10 +242,10 @@ def test_duplicate_identity_demo_scenario_flags_a_high_severity_corroborating_si
     assert data["risk_level"] != "LOW"
 
     detail = client.get(f"/api/cases/{data['case_id']}").json()
-    identity_signals = [s for s in detail["risk_signals"] if s["module"] == "IDENTITY"]
+    identity_signals = [c for c in detail["risk_checks"] if c["category"] == "IDENTITY"]
     assert len(identity_signals) == 1
     assert identity_signals[0]["severity"] == "HIGH"
-    assert "Possible Duplicate Identity" in identity_signals[0]["signal"]
+    assert "Possible Duplicate Identity" in identity_signals[0]["label"]
 
     analysis = detail["analyses"][0]
     assert analysis["face_result"]["status"] == "MATCH"  # clean on its own document
@@ -237,9 +263,28 @@ def test_demo_scenario_failure_does_not_leave_a_zombie_case():
     risk_score=0.0: a zombie that reads exactly like a genuine cleared case
     in the Review Queue and Cases Archive. A failed run must clean up after
     itself instead.
+
+    Asserts a BEFORE/AFTER delta, not an absolute global count: this suite
+    shares one persistent DB across the whole session (no per-test
+    isolation), and several other tests (e.g.
+    test_aadhaar_document_never_gets_a_fabricated_mrz,
+    test_upload_survives_a_random_case_number_collision,
+    test_uploaded_document_is_encrypted_on_disk_and_served_decrypted) call
+    only /api/screening/upload and deliberately stop there to test a single
+    pipeline step in isolation, legitimately leaving their own case at
+    status="PROCESSING" forever. A prior version of this assertion
+    (`count == 0`) was a real test bug, not a product bug: it failed
+    whenever any of those ran first in the same session, even though this
+    scenario's own failure was cleaned up correctly.
     """
     from app.core.database import SessionLocal
     from app.models import Case
+
+    db = SessionLocal()
+    try:
+        before = db.query(Case).filter(Case.status == "PROCESSING").count()
+    finally:
+        db.close()
 
     with patch("app.api.routes.demo.get_ocr_service", side_effect=RuntimeError("Simulated OCR engine failure")):
         with pytest.raises(RuntimeError):
@@ -247,8 +292,8 @@ def test_demo_scenario_failure_does_not_leave_a_zombie_case():
 
     db = SessionLocal()
     try:
-        stuck = db.query(Case).filter(Case.status == "PROCESSING").count()
-        assert stuck == 0, "A failed demo scenario left a PROCESSING zombie case behind"
+        after = db.query(Case).filter(Case.status == "PROCESSING").count()
+        assert after == before, "A failed demo scenario left a PROCESSING zombie case behind"
     finally:
         db.close()
 
@@ -278,6 +323,14 @@ def test_watchlist_evasion_scenario_still_flags_near_miss():
     breakdown = analysis["risk_breakdown"]
     watchlist_factor = next(b for b in breakdown if b["factor"] == "Simulated Watchlist Adapter")
     assert watchlist_factor["raw_risk"] == 100.0
+
+    # A watchlist hit gets its own dedicated audit action -- not just folded
+    # into RISK_CALCULATED's metadata -- so an investigator can find every
+    # watchlist hit across all cases without opening each risk-calculation
+    # entry individually to check whether one happened to be among its inputs.
+    audit_logs = client.get(f"/api/audit?case_id={data['case_id']}&action=WATCHLIST_HIT").json()
+    assert len(audit_logs) == 1
+    assert audit_logs[0]["metadata_json"]["watchlist_id"] == "WL-SIM-2026-081"
 
 def test_get_policy_settings_returns_defaults():
     response = client.get("/api/settings/policy")
@@ -1063,8 +1116,8 @@ def test_aadhaar_document_never_gets_a_fabricated_mrz(tmp_path):
     body = validate_resp.json()
     assert body["mrz_result"] is None
     assert not any(
-        "MRZ" in s["signal"] or "Document Number Inconsistency" in s["signal"]
-        for s in body["validation_result"]["signals"]
+        "MRZ" in c["label"] or "Document Number Inconsistency" in c["label"]
+        for c in body["validation_result"]["checks"] if c["status"] == "FAIL"
     )
 
 def test_upload_survives_a_random_case_number_collision(tmp_path, monkeypatch):

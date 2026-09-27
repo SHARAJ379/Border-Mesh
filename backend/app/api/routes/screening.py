@@ -10,7 +10,7 @@ from app.api.deps import get_db
 from app.core.config import settings
 from app.core.security import validate_image_upload, sanitize_filename, hash_identifier
 from app.core.encryption import write_encrypted_file, encrypt_file_in_place, decrypted_tempfile
-from app.models import Case, DocumentAnalysis, RiskSignal, AuditLog
+from app.models import Case, DocumentAnalysis, RiskCheck, AuditLog
 from app.services.ocr_service import get_ocr_service, TesseractOCRService
 from app.services.mrz_service import MRZService
 from app.services.rules_engine import DocumentRulesEngine
@@ -64,7 +64,7 @@ async def upload_document(
     Uploads document image, creates new case record, and records initial audit log.
     """
     contents = await file.read()
-    validate_image_upload(file.filename, len(contents))
+    validate_image_upload(file.filename, len(contents), contents)
 
     # Generate secure filename
     filename = sanitize_filename(file.filename)
@@ -314,7 +314,7 @@ async def process_face_verification(
     live_face_path = None
     if file:
         contents = await file.read()
-        validate_image_upload(file.filename, len(contents))
+        validate_image_upload(file.filename, len(contents), contents)
         fname = sanitize_filename(file.filename)
         live_face_path = os.path.join(settings.UPLOAD_DIR, "faces", fname)
         write_encrypted_file(live_face_path, contents)
@@ -399,7 +399,24 @@ def process_risk_aggregation(case_id: str, db: Session = Depends(get_db)):
         full_name = ocr_data["fields"]["full_name"]
 
     doc_no = mrz_data.get("document_number") or ocr_data.get("fields", {}).get("document_number")
-    watchlist_match = watchlist_provider.check_watchlist(full_name, doc_no)
+    watchlist_match = watchlist_provider.check_watchlist(db, full_name, doc_no)
+    if watchlist_match:
+        # A dedicated audit action, not just RISK_CALCULATED's rolled-up
+        # metadata below -- an investigator scanning the audit trail for
+        # every watchlist hit across all cases must not have to open each
+        # RISK_CALCULATED entry individually and check whether a watchlist
+        # signal happened to be among its inputs.
+        AuditService.log(
+            db=db,
+            action="WATCHLIST_HIT",
+            case_id=case_id,
+            actor="AI-WATCHLIST-ADAPTER",
+            metadata={
+                "watchlist_id": watchlist_match["entry"]["watchlist_id"],
+                "match_field": watchlist_match["match_field"],
+                "category": watchlist_match["entry"]["category"],
+            }
+        )
 
     # 2. Cross-Case Duplicate Identity Check
     #
@@ -431,7 +448,8 @@ def process_risk_aggregation(case_id: str, db: Session = Depends(get_db)):
         tamper_data=analysis.tamper_result or {},
         face_data=analysis.face_result,
         watchlist_match=watchlist_match,
-        duplicate_identity_match=duplicate_identity_match
+        duplicate_identity_match=duplicate_identity_match,
+        duplicate_identity_checked=bool(live_embedding),
     )
 
     # 4. Update Case
@@ -441,19 +459,22 @@ def process_risk_aggregation(case_id: str, db: Session = Depends(get_db)):
     case.status = f"{risk_res['risk_level']}_RISK" if risk_res["risk_level"] in ["LOW", "MEDIUM"] else ("CRITICAL" if risk_res["risk_level"] == "CRITICAL" else "REQUIRES_REVIEW")
     analysis.risk_breakdown = risk_res["breakdown"]
 
-    # Clear existing signals if re-evaluating, then insert new ones
-    db.query(RiskSignal).filter(RiskSignal.case_id == case_id).delete()
-    for sig in risk_res["signals"]:
-        risk_sig = RiskSignal(
+    # Clear existing checks if re-evaluating, then insert new ones
+    db.query(RiskCheck).filter(RiskCheck.case_id == case_id).delete()
+    for chk in risk_res["checks"]:
+        db.add(RiskCheck(
             case_id=case_id,
-            module=sig["module"],
-            signal=sig["signal"],
-            severity=sig.get("severity", "LOW"),
-            confidence=sig.get("confidence", 0.9),
-            explanation=sig["explanation"],
-            score_impact=sig.get("score_impact", 0.0)
-        )
-        db.add(risk_sig)
+            check_key=chk["id"],
+            category=chk["category"],
+            factor=chk.get("factor"),
+            label=chk["label"],
+            status=chk["status"],
+            severity=chk.get("severity"),
+            confidence=chk.get("confidence", 0.9),
+            explanation=chk["explanation"],
+            evidence=chk.get("evidence"),
+            score_impact=chk.get("score_impact", 0.0),
+        ))
 
     elapsed_ms = (time.time() - t0) * 1000.0
     analysis.processing_time_ms += elapsed_ms
@@ -479,6 +500,6 @@ def process_risk_aggregation(case_id: str, db: Session = Depends(get_db)):
         "recommendation": case.recommendation,
         "critical_floor_applied": risk_res.get("critical_floor_applied", False),
         "breakdown": risk_res["breakdown"],
-        "signals": risk_res["signals"],
+        "checks": risk_res["checks"],
         "elapsed_ms": round(elapsed_ms, 1)
     }

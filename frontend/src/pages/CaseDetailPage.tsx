@@ -8,7 +8,7 @@ import { OCRResults } from '../components/OCRResults';
 import { MRZValidator } from '../components/MRZValidator';
 import { TamperHeatmap } from '../components/TamperHeatmap';
 import { FaceVerification } from '../components/FaceVerification';
-import { EvidenceList } from '../components/EvidenceList';
+import { RiskReasons } from '../components/RiskReasons';
 import { AuditTimeline } from '../components/AuditTimeline';
 import { Tabs, TabItem } from '../components/Tabs';
 import { ScrollReveal } from '../components/ScrollReveal';
@@ -33,7 +33,7 @@ const DETAIL_TABS: TabItem[] = [
   { id: 'mrz', label: 'MRZ', icon: ShieldCheck },
   { id: 'tamper', label: 'Tamper', icon: Flame },
   { id: 'face', label: 'Face', icon: ScanFace },
-  { id: 'evidence', label: 'Evidence', icon: ListChecks },
+  { id: 'evidence', label: 'Risk Reasons', icon: ListChecks },
   { id: 'audit', label: 'Audit Trail', icon: History }
 ];
 
@@ -90,35 +90,30 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({ caseId, onBack }
       weight: 0.25,
       raw_risk: analysis?.validation_result?.failed_count ? 70 : 10,
       weighted_contribution: analysis?.validation_result?.failed_count ? 17.5 : 2.5,
-      top_signals: analysis?.mrz_result?.is_valid ? ['Checksums Verified'] : ['MRZ Discrepancy']
     },
     {
       factor: 'Forensic Tamper AI',
       weight: 0.30,
       raw_risk: (analysis?.tamper_result?.tamper_risk || 0.1) * 100,
       weighted_contribution: ((analysis?.tamper_result?.tamper_risk || 0.1) * 100) * 0.30,
-      top_signals: analysis?.tamper_result?.signals?.map(s => s.type) || ['Authentic Texture']
     },
     {
       factor: 'Biometric Face Verification',
       weight: 0.30,
       raw_risk: analysis?.face_result?.status === 'MATCH' ? 12 : 75,
       weighted_contribution: (analysis?.face_result?.status === 'MATCH' ? 12 : 75) * 0.30,
-      top_signals: [analysis?.face_result?.status || 'Face Evaluated']
     },
     {
       factor: 'Data Consistency Crosscheck',
       weight: 0.10,
       raw_risk: analysis?.validation_result?.failed_count ? 60 : 0,
       weighted_contribution: (analysis?.validation_result?.failed_count ? 60 : 0) * 0.10,
-      top_signals: []
     },
     {
       factor: 'Simulated Watchlist Adapter',
       weight: 0.05,
-      raw_risk: caseData.risk_signals.some(s => s.module === 'WATCHLIST') ? 100 : 0,
-      weighted_contribution: caseData.risk_signals.some(s => s.module === 'WATCHLIST') ? 5.0 : 0.0,
-      top_signals: []
+      raw_risk: caseData.risk_checks.some(c => c.category === 'WATCHLIST' && c.status === 'FAIL') ? 100 : 0,
+      weighted_contribution: caseData.risk_checks.some(c => c.category === 'WATCHLIST' && c.status === 'FAIL') ? 5.0 : 0.0,
     }
   ];
 
@@ -225,7 +220,7 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({ caseId, onBack }
             case 'face':
               return <FaceVerification faceResult={analysis?.face_result} />;
             case 'evidence':
-              return <EvidenceList signals={caseData.risk_signals} />;
+              return <RiskReasons checks={caseData.risk_checks} />;
             case 'audit':
               return <AuditTimeline logs={caseData.audit_logs} />;
             default:

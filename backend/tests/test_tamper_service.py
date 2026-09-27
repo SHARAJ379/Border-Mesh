@@ -101,6 +101,42 @@ def test_extreme_aspect_ratio_guard_does_not_blind_detection_of_a_real_splice_el
     assert x >= 150 and y >= 100  # matches the noise patch, not the banner
 
 
+def test_stamp_shaped_patch_is_classified_as_stamp_forgery():
+    """
+    A pasted/altered stamp patch is a genuinely different shape class from
+    other spliced patches -- calibrated against this project's own
+    synthetic 'stamp_manipulated' specimen (synthetic_generator.py), which
+    draws an exact 180x60px (3.0:1) patch. A patch this shape should be
+    reported as the distinct 'stamp_forgery' type, not lumped into the
+    generic 'edge_discontinuity' catch-all every other spliced-patch shape
+    still gets.
+    """
+    rng = np.random.default_rng(11)
+    canvas = np.full((400, 400, 3), 255, dtype=np.uint8)
+    stamp_patch = rng.integers(0, 255, size=(60, 180, 3), dtype=np.uint8)
+    canvas[150:210, 100:280] = stamp_patch
+
+    anomalies = TamperForensics.detect_splicing_boundaries(canvas)
+    assert len(anomalies) == 1
+    assert anomalies[0]["type"] == "stamp_forgery"
+    assert "stamp" in anomalies[0]["explanation"].lower()
+
+
+def test_non_stamp_shaped_patch_stays_generic_edge_discontinuity():
+    """A patch shaped nothing like a stamp (here, close to the ~1.3:1 this
+    project's own photo-replacement patch uses) must still be caught, but
+    keep the generic 'edge_discontinuity' type -- the stamp classification
+    must not swallow every other kind of spliced patch."""
+    rng = np.random.default_rng(23)
+    canvas = np.full((400, 400, 3), 255, dtype=np.uint8)
+    photo_shaped_patch = rng.integers(0, 255, size=(120, 90, 3), dtype=np.uint8)
+    canvas[100:220, 100:190] = photo_shaped_patch
+
+    anomalies = TamperForensics.detect_splicing_boundaries(canvas)
+    assert len(anomalies) == 1
+    assert anomalies[0]["type"] == "edge_discontinuity"
+
+
 def test_high_confidence_cnn_alone_reaches_high_risk_tier():
     """
     Reproduces a real calibration gap: the tamper CNN was trained tonight to
@@ -268,6 +304,120 @@ def test_stripped_exif_specimen_file_is_flagged(tmp_path):
     service = TamperDetectionService()
     result = service.analyze_exif_metadata(path)
     assert any(s["type"] == "exif_metadata_missing" for s in result["signals"])
+
+
+# --- analyze()'s unified checks list: CNN per-region evidence -------------
+#
+# The priority addition from the risk-reasons schema work: each sampled
+# region (portrait/center/mrz) becomes its own PASS/FAIL check with its own
+# region box and measured probability, rather than a single opaque max()
+# folded silently into the aggregate score.
+
+class _FixedProbabilityModel:
+    """Stands in for LightweightForensicCNN -- returns a fixed
+    [authentic, tampered] logit pair for every patch, so the per-region
+    probability is deterministic and known in advance, independent of the
+    real (untrained-by-default) model's actual weights."""
+
+    def __init__(self, tampered_logit: float):
+        self.tampered_logit = tampered_logit
+
+    def eval(self):
+        return self
+
+    def to(self, device):
+        return self
+
+    def __call__(self, patch_t):
+        import torch
+        batch = patch_t.shape[0]
+        return torch.tensor([[0.0, self.tampered_logit]] * batch)
+
+
+def _real_document_shaped_image(path, size=(400, 260)):
+    rng__ = __import__("numpy").random.default_rng(3)
+    arr = rng__.integers(120, 200, size=(size[1], size[0], 3), dtype="uint8")
+    Image.fromarray(arr).save(path, "JPEG", quality=92)
+
+
+def test_analyze_emits_a_pass_check_per_cnn_region_when_confident_clean(tmp_path):
+    doc_path = str(tmp_path / "doc.jpg")
+    _real_document_shaped_image(doc_path)
+
+    service = TamperDetectionService()
+    service.cnn_ready = True
+    service.model = _FixedProbabilityModel(tampered_logit=-5.0)  # softmax -> ~0% tampered
+
+    result = service.analyze(doc_path, "test-case-cnn-clean")
+
+    cnn_checks = [c for c in result["checks"] if c["id"].startswith("TAMPER_CNN_")]
+    assert len(cnn_checks) == 3
+    assert {c["id"] for c in cnn_checks} == {
+        "TAMPER_CNN_PORTRAIT_REGION", "TAMPER_CNN_CENTER_REGION", "TAMPER_CNN_MRZ_REGION",
+    }
+    for c in cnn_checks:
+        assert c["status"] == "PASS"
+        assert c["evidence"]["region"] is not None
+        assert len(c["evidence"]["region"]) == 4
+        assert c["evidence"]["region_source"] == "document"
+        assert c["evidence"]["measured_value"] < c["evidence"]["threshold_value"]
+
+
+def test_analyze_emits_a_fail_check_per_cnn_region_when_confident_tampered(tmp_path):
+    doc_path = str(tmp_path / "doc.jpg")
+    _real_document_shaped_image(doc_path)
+
+    service = TamperDetectionService()
+    service.cnn_ready = True
+    service.model = _FixedProbabilityModel(tampered_logit=5.0)  # softmax -> ~100% tampered
+
+    result = service.analyze(doc_path, "test-case-cnn-tampered")
+
+    cnn_checks = [c for c in result["checks"] if c["id"].startswith("TAMPER_CNN_")]
+    assert len(cnn_checks) == 3
+    for c in cnn_checks:
+        assert c["status"] == "FAIL"
+        assert c["severity"] in ("MEDIUM", "HIGH", "CRITICAL")
+        assert c["evidence"]["measured_value"] > c["evidence"]["threshold_value"]
+        assert c["score_impact"] > 0.0
+
+
+def test_analyze_emits_no_cnn_checks_when_no_trained_checkpoint_is_loaded(tmp_path):
+    """cnn_ready=False (no checkpoint on disk, see __init__) must not
+    fabricate CNN region checks at all. Forced explicitly rather than
+    relying on whether a real checkpoint happens to be present in this
+    environment -- this repo does commit a trained tamper_cnn.pth."""
+    doc_path = str(tmp_path / "doc.jpg")
+    _real_document_shaped_image(doc_path)
+
+    service = TamperDetectionService()
+    service.cnn_ready = False
+
+    result = service.analyze(doc_path, "test-case-no-cnn")
+
+    assert not any(c["id"].startswith("TAMPER_CNN_") for c in result["checks"])
+
+
+def test_analyze_emits_pass_checks_for_every_category_on_a_clean_document(tmp_path):
+    """A clean document must show a populated evidentiary trail (ELA,
+    edge/splice scan, portrait boundary, text compression, EXIF), not
+    silence -- see the "show why it's clean" principle behind this schema."""
+    doc_path = str(tmp_path / "doc.jpg")
+    _real_document_shaped_image(doc_path)
+
+    service = TamperDetectionService()
+    result = service.analyze(doc_path, "test-case-clean-checks")
+
+    check_ids = {c["id"] for c in result["checks"]}
+    assert "TAMPER_ELA" in check_ids
+    assert "TAMPER_EDGE_DISCONTINUITY" in check_ids
+    assert "TAMPER_PHOTO_BOUNDARY_ANOMALY" in check_ids
+    assert "TAMPER_TEXT_COMPRESSION_ANOMALY" in check_ids
+    # A bare PIL-saved JPEG genuinely carries no EXIF block, so the "missing
+    # metadata" check legitimately fires here rather than PASSing -- either
+    # way, some EXIF-category check must be present, not silence.
+    assert "TAMPER_EXIF_METADATA" in check_ids or "TAMPER_EXIF_METADATA_MISSING" in check_ids
+    assert all(c["status"] in ("PASS", "FAIL") for c in result["checks"])
 
 
 def test_editor_software_specimen_file_is_flagged(tmp_path):
