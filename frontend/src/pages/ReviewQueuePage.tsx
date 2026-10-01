@@ -111,7 +111,10 @@ export const ReviewQueuePage: React.FC<ReviewQueuePageProps> = ({ onSelectCase }
         <div className="relative w-full sm:w-72">
           <Search className="w-3.5 h-3.5 text-muted absolute left-1 top-1/2 -translate-y-1/2" strokeWidth={1.75} />
           <input
+            id="review_queue_search"
+            name="review_queue_search"
             type="text"
+            aria-label="Search by case ID or country"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search Case ID or Country…"
