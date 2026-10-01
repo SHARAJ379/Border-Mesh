@@ -168,10 +168,16 @@ class FaceVerificationService(BaseFaceService):
             }
 
         if len(live_faces) > 1:
+            # doc_faces was already validated above (exactly one face) --
+            # crop and save it here too, same as the `not live_faces` branch
+            # just above: previously this branch alone discarded an already-
+            # successful document detection, showing a blank "Portrait Crop"
+            # placeholder for a photo the pipeline actually had in hand.
+            self.crop_and_save(doc_img, doc_faces[0], doc_crop_path)
             return {
                 "similarity": 0.0,
                 "status": "MULTIPLE_FACES",
-                "document_face_url": None,
+                "document_face_url": f"/uploads/crops/{case_id}_doc_face.jpg",
                 "live_face_url": None,
                 "quality_checks": {"multiple_faces_detected": len(live_faces)},
                 "anti_spoofing_score": 0.4,

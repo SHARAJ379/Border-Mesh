@@ -57,6 +57,45 @@ def test_multiple_document_faces_are_flagged_not_silently_picked(tmp_path):
     )
 
 
+class _FakeDetectorMultiLiveFace:
+    """Reports exactly one plausible face box on the FIRST call (the
+    document side) and two boxes on every call after that (the live-capture
+    side) -- the mirror image of _FakeDetector above, isolating the
+    live-side multiplicity branch specifically."""
+
+    def __init__(self):
+        self.call_count = 0
+
+    def detect_face(self, img_bgr, max_w_ratio=1.0, max_h_ratio=1.0, fallback_rect=None):
+        self.call_count += 1
+        if self.call_count == 1:
+            return [(5, 5, 20, 20)]
+        return [(5, 5, 20, 20), (40, 40, 20, 20)]
+
+
+def test_multiple_live_faces_still_returns_the_already_found_document_crop(tmp_path):
+    """
+    The live-capture multiplicity branch used to discard an already-
+    successful document face detection and return document_face_url: None,
+    unlike the symmetric `not live_faces` branch right above it, which does
+    crop and save it -- the UI showed a blank "Portrait Crop" placeholder
+    for a document photo the pipeline actually had in hand.
+    """
+    doc_path = str(tmp_path / "doc.jpg")
+    live_path = str(tmp_path / "live.jpg")
+    _make_image(doc_path)
+    _make_image(live_path)
+
+    service = FaceVerificationService()
+    service.detector = _FakeDetectorMultiLiveFace()
+
+    result = service.verify(doc_path, live_path, "test-case-multi-live-face")
+
+    assert result["status"] == "MULTIPLE_FACES"
+    assert result["document_face_url"] is not None
+    assert result["live_face_url"] is None
+
+
 class _FakeDetectorWithFrequencyArtifact:
     """A single plausible face on every call (no multi-face/no-face branch
     involved), a high similarity (a clean MATCH), and check_quality
