@@ -4,6 +4,7 @@ import { ProcessingPipeline, PipelineStage } from '../components/ProcessingPipel
 import { SectionHeading } from '../components/SectionHeading';
 import { ScrollReveal } from '../components/ScrollReveal';
 import { validateImageFile } from '../utils/fileValidation';
+import { appendToken } from '../lib/auth';
 import {
   UploadCloud,
   FileText,
@@ -171,13 +172,24 @@ export const ScreeningPage: React.FC<ScreeningPageProps> = ({ onScreeningComplet
         country_name: country
       });
 
-      // Fetch the generated specimen blob so it can be screened as a real File upload
-      const imgRes = await fetch(res.url);
+      // Fetch the generated specimen blob so it can be screened as a real
+      // File upload. /uploads now requires officer auth like every other
+      // route (see backend/app/api/deps.py's get_current_officer) -- a bare
+      // fetch(res.url) 401s, and fetch() doesn't throw on a non-2xx status,
+      // so the "blob" silently became the JSON error body wrapped in a File
+      // claiming to be image/jpeg, which then failed real image validation
+      // at upload time. appendToken puts the session token on the URL the
+      // same way every <img>-rendered upload URL in this app already does.
+      const specimenUrl = appendToken(res.url);
+      const imgRes = await fetch(specimenUrl);
+      if (!imgRes.ok) {
+        throw new Error(`Failed to fetch generated specimen (HTTP ${imgRes.status}).`);
+      }
       const blob = await imgRes.blob();
       const file = new File([blob], res.filename, { type: 'image/jpeg' });
 
       setDocFile(file);
-      setDocPreview(res.url);
+      setDocPreview(specimenUrl);
       setDocError(null);
     } catch (err: any) {
       setPipelineError(`Specimen generator error: ${err.message}`);
