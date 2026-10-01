@@ -17,6 +17,8 @@ The system implements a multi-signal forensic pipeline that analyzes physical an
 > This application is an **SIH prototype and decision-support tool**, not a production law enforcement system. It **never** connects to live government or Interpol databases, **never** accuses an individual of being fraudulent, and strictly presents results as *"risk indicators requiring human officer review."*
 >
 > **On synthetic vs. real data — stated accurately, not softened:** the demo defaults to synthetic data — a built-in generator produces fictional specimens for a fictional "Republic of Utopia," and the default live-face comparison uses AI-generated (StyleGAN2) portraits (`demo-data/faces/person_a.jpg`, `person_b.jpg`) that don't depict real people. **But the document-upload and webcam-capture flows genuinely accept and process real images if you provide one** — there is no special-casing or technical barrier in this codebase that limits it to synthetic input, and a real document photo or a real face capture is stored (encrypted) and processed by the same pipeline as demo data. If you're evaluating this system, use the built-in specimen generator or the provided demo scenarios rather than real documents or faces, unless you specifically intend to test with real data. See [`docs/PRIVACY_POLICY.md`](docs/PRIVACY_POLICY.md) (also reachable in-app at `/privacy`) for exactly what happens to whatever is provided.
+>
+> **Read [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) before trusting any number in this document.** It states, with exact measured figures and the honest "why," exactly what this system does and doesn't do well — real tamper-CNN recall on human-made forgeries (not the synthetic-validation number quoted below), the unmodified-VGGFace2 face embedder and two fine-tune attempts that were tried and reverted, the fictional watchlist, the single static demo encryption key, and more. This README states what the system does; that file states where it falls short. Treat both as equally authoritative.
 
 ---
 
@@ -48,10 +50,11 @@ IMMUTABLE AUDIT TRAIL (Chain of Custody Event Ledger)
 
 ## 3. Four Core AI Forensic Modules
 
-### Module 1 — OCR Field Extraction
+### Module 1 — OCR Field Extraction & Document Type Detection
 - **Image Preprocessing:** High-resolution normalization (1600px width), grayscale conversion, Contrast Limited Adaptive Histogram Equalization (CLAHE), and Gaussian denoising.
 - **Engine:** PyTesseract with layout analysis.
-- **Extracted Fields:** Full Name, Document Number, Nationality, Country of Issue, Date of Birth, Date of Issue, Date of Expiry, Sex, and MRZ text buffer.
+- **7 Document Types, Auto-Detected from Content:** Passport (ICAO MRZ), Aadhaar, PAN, Driving Licence, Voter ID (EPIC), Visa, and Residence/Work/Entry/Transit Permit — detected from issuer-specific text markers (`ocr_service.py`'s `_detect_document_type`), not a user-selected dropdown. Only Passport/Visa carry an ICAO MRZ; the other five skip MRZ parsing entirely rather than risk fabricating a fake MRZ from a card's own boilerplate text.
+- **Extracted Fields:** Full Name, Document Number, Nationality, Country of Issue, Date of Birth, Date of Issue, Date of Expiry, Sex, and (for MRZ-bearing documents) the MRZ text buffer.
 - **Confidence Scoring:** Real-time average word-level confidence calculation.
 - **Dedicated MRZ-Band Pass:** A second, separate OCR pass crops just the machine-readable zone, upscales it 3x, binarizes it, and restricts Tesseract to the `A-Z0-9<` character set with a single-uniform-block layout mode — the standard technique for reliable MRZ OCR, far more accurate than reading the MRZ off the general whole-document pass. Includes a reconstruction step that recovers under-counted runs of the `<` filler character without corrupting fixed-position check digits.
 
@@ -70,6 +73,8 @@ IMMUTABLE AUDIT TRAIL (Chain of Custody Event Ledger)
 - **Signal C — Portrait Seam Analysis:** Boundary gradient consistency check around the photo perimeter to detect photo replacement.
 - **Signal D — Text Compression Inconsistency:** Compares ELA compression ratios between MRZ and document body.
 - **Signal E — Lightweight CNN:** 3-layer Convolutional Neural Network patch classifier, sampled across the portrait/center/MRZ regions (not just the document center, where tampering rarely occurs). An untrained network is deliberately excluded from the score rather than mixed in as noise — `TamperDetectionService` only uses its output once a trained checkpoint exists (`backend/app/ml/weights/tamper_cnn.pth`, committed to this repo). Trained via `scripts/train_tamper_cnn.py` on a blend of the synthetic splice-forgery generator's patches and real human-made splices from the CASIA v2.0 image tampering dataset (real photographs, not documents, but a far less predictable splice signature than synthetic rectangular copy-paste alone) — **87.8% validation accuracy**. Re-run training yourself with `CASIA2_DIR=<path to extracted CASIA2> PYTHONPATH=backend python scripts/train_tamper_cnn.py` (falls back to synthetic-only if `CASIA2_DIR` is unset).
+
+  **That 87.8% is training-validation accuracy, not real-world recall — stated plainly rather than left to imply more than it does.** Evaluated directly against the full CASIA v2.0 held-out set (24,944 real, human-made splice patches), the same checkpoint scores **71.2% accuracy, 39.5% recall** — meaning **60.6% of real forgeries are missed** by this signal alone. See [`KNOWN_LIMITATIONS.md` §1](KNOWN_LIMITATIONS.md#1-tamper-detection-accuracy-on-real-forgeries) for the full breakdown and why this wasn't re-architected before judging. This is one signal of five feeding the risk engine below, not a standalone verdict — but it is the weakest of the five, and the one most likely to matter if you're deciding how much to trust a CLEAR result.
 
   **Known ceiling, and how to push past it:** three independent local experiments (bigger model, added regularization/augmentation, 5x more training data) each held out a good validation accuracy but failed a direct sanity check against fresh genuine specimens -- consistent evidence that this model's size and CPU-only local training, not any single tunable, is the actual constraint. [`notebooks/BorderMesh_Tamper_CNN_Colab.ipynb`](notebooks/BorderMesh_Tamper_CNN_Colab.ipynb) is a GPU-based Colab notebook (open it directly at `https://colab.research.google.com/github/<your-fork>/SyntaxSquad/blob/main/notebooks/BorderMesh_Tamper_CNN_Colab.ipynb`) that trains a proper transfer-learning model (MobileNetV3-Small) on a real GPU, blending in [IDNet](https://arxiv.org/abs/2408.01690) (CC0-licensed, ~837k synthetic ID document images with fraud ground truth) alongside CASIA and this project's own generator -- reusing the exact domain-balanced sampling and sanity-check discipline from the local experiments so a checkpoint isn't trusted on validation accuracy alone.
 
@@ -129,22 +134,28 @@ border-mesh/
 │   │   ├── ml/                         # PyTorch CNN tamper classifier & Face Embedder
 │   │   ├── utils/                      # Synthetic passport generator & image processing
 │   │   └── api/routes/                 # REST endpoints (cases, screening, dashboard, demo, health)
-│   ├── tests/                          # 77 automated unit & integration tests (100% pass rate)
+│   ├── tests/                          # 282 automated unit & integration tests (100% pass rate)
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
 │   │   ├── components/                 # RiskScore, MRZValidator, TamperHeatmap, FaceVerification, etc.
-│   │   ├── pages/                      # Dashboard, Screening, CaseDetail, ReviewQueue, Analytics, Audit, Settings
+│   │   ├── pages/                      # Dashboard, Screening, CaseDetail, ReviewQueue, Analytics, Audit, Settings,
+│   │   │                               # Compliance (DPDP Act 2023), ChangeDetection, WelcomePage, Privacy/Terms
 │   │   ├── services/api.ts             # Typed REST client
 │   │   ├── types/index.ts              # TypeScript interfaces
-│   │   ├── App.tsx                     # Master layout and tab router
-│   │   └── index.css                   # Dark security-ops theme
+│   │   ├── App.tsx                     # Master layout and tab router (operations dashboard)
+│   │   └── main.tsx                    # Resolves /welcome, /privacy, /terms vs the dashboard app by path
 │   ├── Dockerfile
 │   ├── nginx.conf
-│   └── package.json
+│   └── package.json                    # 64 automated component/unit tests (vitest, 100% pass rate)
 ├── demo-data/
-│   └── samples/                        # Pre-generated synthetic test specimen images
+│   ├── samples/                        # Pre-generated synthetic test specimen images
+│   └── faces/                          # AI-generated (StyleGAN2) demo portraits -- not real people
+├── docs/
+│   └── PRIVACY_POLICY.md               # Also reachable in-app at /privacy
+├── notebooks/
+│   └── BorderMesh_Tamper_CNN_Colab.ipynb # GPU transfer-learning notebook for the tamper CNN (see Module 3)
 ├── scripts/
 │   ├── seed_cases.py                   # Seeds 20 realistic synthetic cases into DB
 │   ├── generate_demo_docs.py           # Generates offline test specimens
@@ -153,6 +164,7 @@ border-mesh/
 │   └── train_tamper_cnn.py             # Trains the tamper CNN; run once, then restart the backend
 ├── docker-compose.yml                  # Complete stack (Postgres + Backend + Frontend)
 ├── .env.example
+├── KNOWN_LIMITATIONS.md                # What this system doesn't do well, with real numbers -- read this
 └── README.md
 ```
 
@@ -248,7 +260,9 @@ To execute the automated unit and integration tests across MRZ checksum algorith
 PYTHONPATH=backend ./venv/bin/pytest backend/tests -v
 ```
 
-All 77 automated tests pass with 100% success rate across core logic, ML signals, and security APIs. `test_api.py` uses `TestClient` as a context manager so the app's startup lifespan (table creation + seeding) actually runs — a bare `TestClient(app)` silently skips it.
+All 282 backend tests pass with 100% success rate across core logic, ML signals, and security APIs (plus 64 frontend component/unit tests via `npm test` in `frontend/`, also 100% passing — React Testing Library + Vitest). `test_api.py` uses `TestClient` as a context manager so the app's startup lifespan (table creation + seeding) actually runs — a bare `TestClient(app)` silently skips it.
+
+> **No CI pipeline runs these automatically yet** — both suites are run locally/manually; there is no `.github/workflows` configured. A passing suite reflects the last time someone ran it, not a gate enforced on every push.
 
 > **Platform note:** `test_api.py::test_demo_scenario_execution` asserts the "genuine" demo scenario scores LOW. The specimen image's exact pixels (and therefore the tamper CNN's score) depend on which font PIL falls back to for text rendering, which differs between macOS (Helvetica) and the Linux container (DejaVu, installed in `backend/Dockerfile`) -- this can occasionally push the score to the MEDIUM/LOW boundary locally on macOS even though it is reliably LOW in the actual deployment target. Docker is the authoritative environment for this test; run it there (`docker compose exec backend python3 -m pytest tests/test_api.py -v` from `backend/`) for a result that matches production.
 
@@ -274,10 +288,18 @@ Use the top toolbar **"Demo scenario"** selector to demonstrate predefined test 
 
 1. **Genuine Document:** Real photo, valid checksums, matching live face $\rightarrow$ `LOW RISK — CLEAR FOR ENTRY` (face similarity ~0.99 MATCH, no tamper signals).
 2. **MRZ Tampering:** Intentionally corrupted check digits in line 2 $\rightarrow$ `HIGH RISK — SECONDARY INSPECTION` (checksum-invalid CRITICAL signal floors the score regardless of a clean face/tamper result).
-3. **Photo Replacement:** Document photo is Person A, live capture is Person B — a genuine biometric mismatch, not a scripted one $\rightarrow$ `MEDIUM RISK — ROUTINE VERIFICATION` (face similarity ~0.64 REVIEW_REQUIRED, plus a real edge-discontinuity splice signal).
+3. **Photo Replacement:** Document photo is Person A, live capture is Person B — a genuine biometric mismatch, not a scripted one $\rightarrow$ `HIGH RISK — SECONDARY INSPECTION` (face similarity ~0.61 REVIEW_REQUIRED, plus a real edge-discontinuity splice signal).
 4. **Expired Document:** Travel validity expired before present calendar date $\rightarrow$ `HIGH RISK — SECONDARY INSPECTION` (an expired document is a CRITICAL, deterministic rule violation, floored to HIGH regardless of how clean the biometric/tamper signals are).
 5. **Multiple Anomalies:** Tampered MRZ + mismatched face + simulated watchlist hit $\rightarrow$ `HIGH RISK — SECONDARY INSPECTION`.
 6. **Watchlist Evasion Attempt:** Every signal looks clean — valid MRZ, matching face, no tamper — except the traveler's name and document number are each a single character off from a real watchlist entry $\rightarrow$ `HIGH RISK — SECONDARY INSPECTION`. Demonstrates the bounded fuzzy-matching fix: an exact-match-only watchlist check would have missed this entirely and cleared the traveler as LOW risk.
+7. **PAN Card Verification:** Non-MRZ document type, Income Tax Dept. issuer markers, PAN structure/entity-type validation $\rightarrow$ `LOW RISK — CLEAR FOR ENTRY`.
+8. **Driving Licence — Expired:** Non-MRZ document, expired validity $\rightarrow$ `HIGH RISK — SECONDARY INSPECTION`.
+9. **Voter ID (EPIC) Verification:** Non-MRZ document $\rightarrow$ `LOW RISK — CLEAR FOR ENTRY`.
+10. **Travel Visa — Stay Duration Expired:** $\rightarrow$ `HIGH RISK — SECONDARY INSPECTION`.
+11. **Residence Permit — Expired:** $\rightarrow$ `HIGH RISK — SECONDARY INSPECTION`.
+12. **Duplicate Identity Detection:** A document with an entirely different, individually-clean claimed identity (different name, different document number) whose live face matches a *prior* screening's live face via the cross-case embedding gallery $\rightarrow$ `MEDIUM RISK — ROUTINE VERIFICATION`. Every signal on this document alone is clean; only the 1:N gallery lookup catches it — a real capability most hackathon demos skip because it requires persisting embeddings across cases, not just within one.
+
+A 13th flow, **Same-Identity Change Detection** (toolbar: "Change Detection"), is structurally different from the twelve above — it doesn't score a single document, it generates two submissions for one claimed identity and reports exactly which fields (DOB, expiry, portrait photo) differ between them, catching a resubmission whose MRZ checksum alone validates perfectly.
 
 Manual "New Screening" uploads can use the same specimens directly: `demo-data/samples/specimen_*.jpg` paired with `sample_live_face.jpg` (matching person, for a MATCH result) or `sample_live_face_mismatch.jpg` (different person, for a REVIEW_REQUIRED result).
 
@@ -300,6 +322,8 @@ The project is built specifically under the **Blockchain & Cybersecurity** theme
 - **GDPR Article 17 Biometric Purge Scrubber:** Dedicated protocol permanently scrubs raw passport scans, webcam selfies, and facial crops from disk while preserving the anonymized case ID and cryptographic ledger signature.
 - **Multi-Signal Forensics:** Dual-domain ELA and Laplacian edge discontinuity detection prevents digital impersonation.
 - **Sandboxed Watchlists:** Air-gapped in-memory mock database prevents accidental leaks or live government queries.
+
+  **Honest scope of access control, stated with the same bar as the encryption-key caveat above:** there is no user account system, no login, and no per-officer identity — every audit-trail entry is attributed to a hardcoded `OFFICER-DEMO-01`. A single shared `OFFICER_API_KEY` (`backend/app/core/config.py`) gates only the two most sensitive, irreversible actions — permanent case deletion and the biometric purge protocol — against a bare, credential-free request; since the frontend must embed this key to call those endpoints, it's a shared secret visible in the frontend bundle, not a real access-control boundary against a determined attacker. Every other route, including case detail and the decrypt-and-stream `/uploads` route serving document/face images, has no authentication at all. This is a single-tenant demo decision, not an oversight to be quietly patched — see [`KNOWN_LIMITATIONS.md` §6](KNOWN_LIMITATIONS.md#6-no-per-officer-authentication) for what real per-officer auth would require. **Do not deploy this against real traveler data without adding it first.**
 
 ---
 
