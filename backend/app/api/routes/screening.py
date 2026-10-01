@@ -213,8 +213,12 @@ def process_mrz_and_validation(case_id: str, db: Session = Depends(get_db), _off
             else None
         ) or MRZService.extract_mrz_from_lines(detected_lines)
 
-    # Evaluate Document Rules
-    validation_data = DocumentRulesEngine.evaluate(ocr_result, mrz_data)
+    # Evaluate Document Rules -- case.country at this point is still
+    # whatever the officer selected at upload (the block below is the only
+    # place it's ever overwritten, and that happens after this call), so
+    # this is the correct "declared" value to cross-check the document
+    # against (see RULE 10 in rules_engine.py).
+    validation_data = DocumentRulesEngine.evaluate(ocr_result, mrz_data, declared_country=case.country)
 
     elapsed_ms = (time.time() - t0) * 1000.0
     analysis.mrz_result = mrz_data

@@ -554,3 +554,62 @@ def test_permit_valid_expiry_passes():
     expired_check = _find(eval_res["checks"], "DOCUMENT_EXPIRATION")
     assert expired_check["status"] == "PASS"
     assert not any(c["label"] == "Document Expired" for c in eval_res["checks"])
+
+
+def test_declared_jurisdiction_mismatch_is_flagged_via_visual_country_field():
+    """
+    The manual New Screening flow lets an officer pick an "Issuing
+    jurisdiction" at upload time (stored as Case.country) independently of
+    whatever document they actually upload -- previously nothing compared
+    the two, so uploading e.g. a Republic of Utopia passport while having
+    selected "India" at intake went completely unflagged.
+    """
+    ocr_data = {"fields": {"document_number": "X1234567", "country": "REPUBLIC OF UTOPIA"}}
+    eval_res = DocumentRulesEngine.evaluate(ocr_data, None, declared_country="INDIA")
+    check = _find(eval_res["checks"], "JURISDICTION_COUNTRY_CROSSCHECK")
+    assert check["status"] == "FAIL"
+    assert check["severity"] == "HIGH"
+    assert check["factor"] == "CONSISTENCY"
+    assert check["evidence"]["measured_value"] == "REPUBLIC OF UTOPIA"
+    assert check["evidence"]["threshold_value"] == "INDIA"
+
+
+def test_declared_jurisdiction_match_passes():
+    ocr_data = {"fields": {"document_number": "X1234567", "country": "REPUBLIC OF UTOPIA"}}
+    eval_res = DocumentRulesEngine.evaluate(ocr_data, None, declared_country="Republic of Utopia")
+    check = _find(eval_res["checks"], "JURISDICTION_COUNTRY_CROSSCHECK")
+    assert check["status"] == "PASS"
+
+
+def test_declared_jurisdiction_mismatch_falls_back_to_mrz_code_when_no_visual_field():
+    """When the visual 'Country of Issue' field wasn't extracted, falls back
+    to comparing the MRZ's own 3-letter issuing-state code against the
+    declared jurisdiction's known code."""
+    ocr_data = {"fields": {"document_number": "X1234567"}}
+    mrz_data = {
+        "document_number": "X1234567", "country": "UTO", "nationality": "UTO",
+        "birth_date": "000101", "expiry_date": "300101", "checksums": [],
+    }
+    eval_res = DocumentRulesEngine.evaluate(ocr_data, mrz_data, declared_country="INDIA")
+    check = _find(eval_res["checks"], "JURISDICTION_COUNTRY_CROSSCHECK")
+    assert check["status"] == "FAIL"
+    assert check["evidence"]["measured_value"] == "UTO"
+
+
+def test_declared_jurisdiction_crosscheck_not_applicable_when_document_country_unknown():
+    """A declared jurisdiction with nothing on the document side to compare
+    it against (no visual country field, no MRZ) must show NOT_APPLICABLE,
+    not a silent pass or a false failure."""
+    ocr_data = {"fields": {"document_number": "X1234567"}}
+    eval_res = DocumentRulesEngine.evaluate(ocr_data, None, declared_country="INDIA")
+    check = _find(eval_res["checks"], "JURISDICTION_COUNTRY_CROSSCHECK")
+    assert check["status"] == "NOT_APPLICABLE"
+
+
+def test_declared_jurisdiction_crosscheck_skipped_when_nothing_declared():
+    """No declared_country passed at all (e.g. the 1-click demo scenario
+    flow, which has no separate officer-intake step) -- the rule doesn't
+    run rather than fabricating a comparison against nothing."""
+    ocr_data = {"fields": {"document_number": "X1234567", "country": "REPUBLIC OF UTOPIA"}}
+    eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
+    assert not any(c["id"] == "JURISDICTION_COUNTRY_CROSSCHECK" for c in eval_res["checks"])

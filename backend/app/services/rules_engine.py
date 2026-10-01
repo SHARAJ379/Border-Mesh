@@ -53,6 +53,22 @@ class DocumentRulesEngine:
         "G": "Government",
     }
 
+    # Maps each option in the manual "New Screening" flow's Issuing
+    # Jurisdiction dropdown (frontend/src/pages/ScreeningPage.tsx) to its
+    # ICAO 3-letter country code, for RULE 10 below -- a document's MRZ
+    # carries only the code, not the full name. Intentionally duplicated
+    # from app.api.routes.demo's KNOWN_COUNTRY_CODES (same convention this
+    # file already uses for NON_MRZ_DOCUMENT_TYPES above) rather than
+    # imported, since a service module importing from an API route module
+    # would be a backwards dependency.
+    JURISDICTION_COUNTRY_CODES = {
+        "REPUBLIC OF UTOPIA": "UTO",
+        "DEMO STATE": "DEM",
+        "ATLANTIS FEDERATION": "ATL",
+        "INDIA": "IND",
+        "UNITED KINGDOM": "GBR",
+    }
+
     @classmethod
     def parse_ddmmyyyy(cls, value: Optional[str]) -> Optional[date]:
         """
@@ -92,7 +108,10 @@ class DocumentRulesEngine:
             return None
 
     @classmethod
-    def evaluate(cls, ocr_data: Dict[str, Any], mrz_data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    def evaluate(
+        cls, ocr_data: Dict[str, Any], mrz_data: Optional[Dict[str, Any]],
+        declared_country: Optional[str] = None,
+    ) -> Dict[str, Any]:
         checks: List[Dict[str, Any]] = []
 
         def add(
@@ -374,6 +393,57 @@ class DocumentRulesEngine:
                                                   threshold_value=", ".join(sorted(cls.VISA_ENTRY_VALIDATION_VALUES)),
                                                   unit="visa_entry_type"),
                     score_impact=8.0)
+
+        # RULE 10: Declared Jurisdiction vs. Document's Own Country --
+        # catches a case where the officer selects one issuing jurisdiction
+        # at upload (ScreeningPage.tsx's "Issuing jurisdiction" dropdown,
+        # stored as Case.country) but the document actually presented is
+        # printed for a different country entirely. This used to go
+        # completely unchecked: Case.country was only ever overwritten by
+        # the MRZ's own country when it was still "Unknown" (see
+        # screening.py), never compared against what the officer actually
+        # declared. A genuine cross-source consistency check, like RULE 4
+        # above -- factor=CONSISTENCY, not MRZ_VALIDATION, for the same
+        # reason (see that rule's own comment).
+        declared = (declared_country or "").strip().upper()
+        if declared and declared != "UNKNOWN":
+            document_country_name = (fields.get("country") or "").strip().upper()
+            document_country_code = ((mrz_data or {}).get("country") or "").strip().upper()
+            declared_code = cls.JURISDICTION_COUNTRY_CODES.get(declared)
+
+            # Prefer comparing full names (the visual "Country of Issue"
+            # field, populated for every document type including the ones
+            # with no MRZ) -- fall back to comparing ICAO codes only when
+            # the visual field wasn't extracted but an MRZ was.
+            if document_country_name:
+                is_consistent = document_country_name == declared
+                compared_against = document_country_name
+            elif document_country_code and declared_code:
+                is_consistent = document_country_code == declared_code
+                compared_against = document_country_code
+            else:
+                is_consistent = None
+                compared_against = None
+
+            if is_consistent is None:
+                add("JURISDICTION_COUNTRY_CROSSCHECK", "Declared Jurisdiction Crosscheck",
+                    RiskCheckStatus.NOT_APPLICABLE, None,
+                    "Officer-declared issuing jurisdiction could not be cross-checked against the document's "
+                    "own printed country or MRZ issuing-state code -- neither was extracted.",
+                    0.5, factor=RiskFactorKey.CONSISTENCY)
+            elif not is_consistent:
+                evidence = make_evidence(measured_value=compared_against, threshold_value=declared, unit="issuing_country")
+                add("JURISDICTION_COUNTRY_CROSSCHECK", "Declared Jurisdiction Does Not Match Document", False, "HIGH",
+                    f"Officer selected '{declared_country}' as the issuing jurisdiction at intake, but the "
+                    f"document itself is printed for '{compared_against}'. Either a data-entry error or a "
+                    f"document presented under an inconsistent claimed origin -- requires officer verification.",
+                    0.85, evidence=evidence, score_impact=15.0, factor=RiskFactorKey.CONSISTENCY)
+            else:
+                evidence = make_evidence(measured_value=compared_against, threshold_value=declared, unit="issuing_country")
+                add("JURISDICTION_COUNTRY_CROSSCHECK", "Declared Jurisdiction Crosscheck", True, None,
+                    f"Officer-declared issuing jurisdiction ('{declared_country}') matches the document's own "
+                    f"printed/MRZ country.",
+                    0.90, evidence=evidence, factor=RiskFactorKey.CONSISTENCY)
 
         # Permit deliberately has NO dedicated expiration rule here, unlike
         # Visa's stay-duration check above -- a Permit has only one temporal
