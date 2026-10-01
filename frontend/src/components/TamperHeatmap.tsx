@@ -5,6 +5,7 @@ import { RiskBadge } from './RiskBadge';
 import { SectionHeading } from './SectionHeading';
 import { ScrollReveal } from './ScrollReveal';
 import { Magnifier } from './Magnifier';
+import { appendToken } from '../lib/auth';
 
 interface TamperHeatmapProps {
   originalImageUrl?: string;
@@ -104,7 +105,7 @@ export const TamperHeatmap: React.FC<TamperHeatmapProps> = ({
               </span>
               <div className="photo-shadow border border-hairline bg-paper-dim aspect-[3/4] sm:aspect-[4/5] flex items-center justify-center overflow-hidden">
                 {tamperResult.heatmap_url ? (
-                  <Magnifier src={tamperResult.heatmap_url} alt="ELA Heatmap" className="w-full h-full object-contain" />
+                  <Magnifier src={appendToken(tamperResult.heatmap_url)} alt="ELA Heatmap" className="w-full h-full object-contain" />
                 ) : (
                   <span className="text-[11px] text-muted">Heatmap Processing</span>
                 )}
@@ -114,7 +115,7 @@ export const TamperHeatmap: React.FC<TamperHeatmapProps> = ({
         ) : (
           <div className="photo-shadow border border-hairline bg-paper-dim min-h-[420px] max-h-[70vh] flex items-center justify-center overflow-hidden">
             {(() => {
-              const activeSrc = viewMode === 'original' ? originalImageUrl : tamperResult.heatmap_url || originalImageUrl;
+              const activeSrc = viewMode === 'original' ? originalImageUrl : appendToken(tamperResult.heatmap_url) || originalImageUrl;
               return activeSrc ? (
                 <Magnifier
                   src={activeSrc}

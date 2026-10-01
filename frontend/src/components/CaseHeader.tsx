@@ -3,6 +3,7 @@ import { CaseDetail, OfficerDecision } from '../types';
 import { RiskBadge } from './RiskBadge';
 import { Shield, Clock, Globe, FileText, CheckCircle, Send, Trash2 } from 'lucide-react';
 import { api } from '../services/api';
+import { getOfficer } from '../lib/auth';
 
 interface CaseHeaderProps {
   caseData: CaseDetail;
@@ -155,7 +156,7 @@ export const CaseHeader: React.FC<CaseHeaderProps> = ({
             Screening officer determination
           </span>
           <span className="text-[11px] text-muted">
-            Recorded by: OFFICER-DEMO-01
+            Recorded by: {getOfficer()?.badge_id ?? 'Unknown officer'}
           </span>
         </div>
 

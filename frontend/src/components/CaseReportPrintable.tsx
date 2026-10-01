@@ -1,5 +1,6 @@
 import React from 'react';
 import { CaseDetail, DocumentAnalysis, RiskFactorContribution, RiskLevel } from '../types';
+import { appendToken } from '../lib/auth';
 
 interface CaseReportPrintableProps {
   caseData: CaseDetail;
@@ -180,7 +181,7 @@ export const CaseReportPrintable: React.FC<CaseReportPrintableProps> = ({
                   }}
                 >
                   {face?.document_face_url ? (
-                    <img src={face.document_face_url} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={appendToken(face.document_face_url!)} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <span style={{ fontSize: 9, color: '#94A3B8' }}>Portrait</span>
                   )}
@@ -201,7 +202,7 @@ export const CaseReportPrintable: React.FC<CaseReportPrintableProps> = ({
                   }}
                 >
                   {face?.live_face_url ? (
-                    <img src={face.live_face_url} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={appendToken(face.live_face_url!)} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <span style={{ fontSize: 9, color: '#94A3B8' }}>Live Capture</span>
                   )}

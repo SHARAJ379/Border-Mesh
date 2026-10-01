@@ -207,6 +207,31 @@ class WatchlistEntry(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class Officer(Base):
+    """
+    Real per-officer account -- replaces the single shared OFFICER_API_KEY
+    that used to gate the 4 most sensitive actions (and nothing else). Every
+    authenticated request now resolves to a specific Officer row (see
+    app.api.deps.get_current_officer), so AuditLog.actor can record who
+    actually did something instead of a hardcoded "OFFICER-DEMO-01"
+    string, and every data-reading route can require real login rather
+    than being open to any unauthenticated request.
+
+    `badge_id` doubles as the login username and the audit-trail actor
+    value -- there is no separate internal ID vs. display-name split,
+    matching how every pre-existing audit entry already recorded a human-
+    readable actor string.
+    """
+    __tablename__ = "officers"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    badge_id = Column(String(64), unique=True, nullable=False, index=True)
+    full_name = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class PolicySettings(Base):
     """
     Single-row table (id is always 1) holding the live-editable risk engine

@@ -124,6 +124,7 @@ A weighted average alone can let a definitive rule violation — an expired docu
 
 ```text
 border-mesh/
+├── .github/workflows/ci.yml            # Backend pytest + frontend vitest/lint/build on every push/PR
 ├── backend/
 │   ├── app/
 │   │   ├── main.py                     # FastAPI application entrypoint & lifespan
@@ -133,8 +134,8 @@ border-mesh/
 │   │   ├── services/                   # Business logic (OCR, MRZ, Rules, Tamper, Face, Risk, Watchlist, Audit)
 │   │   ├── ml/                         # PyTorch CNN tamper classifier & Face Embedder
 │   │   ├── utils/                      # Synthetic passport generator & image processing
-│   │   └── api/routes/                 # REST endpoints (cases, screening, dashboard, demo, health)
-│   ├── tests/                          # 282 automated unit & integration tests (100% pass rate)
+│   │   └── api/routes/                 # REST endpoints (auth, cases, screening, dashboard, demo, health)
+│   ├── tests/                          # 288 automated unit & integration tests (100% pass rate)
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── frontend/
@@ -148,7 +149,7 @@ border-mesh/
 │   │   └── main.tsx                    # Resolves /welcome, /privacy, /terms vs the dashboard app by path
 │   ├── Dockerfile
 │   ├── nginx.conf
-│   └── package.json                    # 64 automated component/unit tests (vitest, 100% pass rate)
+│   └── package.json                    # 67 automated component/unit tests (vitest, 100% pass rate)
 ├── demo-data/
 │   ├── samples/                        # Pre-generated synthetic test specimen images
 │   └── faces/                          # AI-generated (StyleGAN2) demo portraits -- not real people
@@ -184,7 +185,7 @@ Access:
 - **Frontend Dashboard:** `http://localhost:5173`
 - **Backend Swagger Docs:** `http://localhost:8000/docs`
 
-The first build downloads ~107MB of pretrained face-embedding weights (needs internet once, during the build); the container runs fully offline after that. The database auto-seeds 20 synthetic demo cases on first boot.
+The first build downloads ~107MB of pretrained face-embedding weights (needs internet once, during the build); the container runs fully offline after that. The database auto-seeds 20 synthetic demo cases **and one demo officer account** on first boot: badge ID `OFFICER-DEMO-01`, password from `DEFAULT_OFFICER_PASSWORD` (see `.env.example`) — log in with these at the dashboard's login screen before anything else works (see section 10B).
 
 ---
 
@@ -260,13 +261,15 @@ To execute the automated unit and integration tests across MRZ checksum algorith
 PYTHONPATH=backend ./venv/bin/pytest backend/tests -v
 ```
 
-All 282 backend tests pass with 100% success rate across core logic, ML signals, and security APIs (plus 64 frontend component/unit tests via `npm test` in `frontend/`, also 100% passing — React Testing Library + Vitest). `test_api.py` uses `TestClient` as a context manager so the app's startup lifespan (table creation + seeding) actually runs — a bare `TestClient(app)` silently skips it.
+All 288 backend tests pass with 100% success rate across core logic, ML signals, and security APIs (plus 67 frontend component/unit tests via `npm test` in `frontend/`, also 100% passing — React Testing Library + Vitest). `test_api.py` uses `TestClient` as a context manager so the app's startup lifespan (table creation + seeding) actually runs — a bare `TestClient(app)` silently skips it.
 
-> **No CI pipeline runs these automatically yet** — both suites are run locally/manually; there is no `.github/workflows` configured. A passing suite reflects the last time someone ran it, not a gate enforced on every push.
+> Both suites run automatically on every push/PR via GitHub Actions (`.github/workflows/ci.yml`) — backend pytest, frontend vitest, `oxlint`, and a full `tsc -b && vite build`. A red CI run means the suite actually failed on that commit, not that nobody happened to run it locally.
 
 > **Platform note:** `test_api.py::test_demo_scenario_execution` asserts the "genuine" demo scenario scores LOW. The specimen image's exact pixels (and therefore the tamper CNN's score) depend on which font PIL falls back to for text rendering, which differs between macOS (Helvetica) and the Linux container (DejaVu, installed in `backend/Dockerfile`) -- this can occasionally push the score to the MEDIUM/LOW boundary locally on macOS even though it is reliably LOW in the actual deployment target. Docker is the authoritative environment for this test; run it there (`docker compose exec backend python3 -m pytest tests/test_api.py -v` from `backend/`) for a result that matches production.
 
 **API & integration** (`test_api.py`) — health, dashboard stats, case listing, demo scenario execution, officer decisions, SHA-256 blockchain ledger verification, GDPR Art. 17 biometric purge, policy settings (weights/thresholds validated both at the API layer and, independently, inside the service function itself so a future caller can't bypass it), CORS configuration (an arbitrary origin must not be reflected back), and that the face-verification API reports the same match threshold it actually used to decide MATCH vs REVIEW_REQUIRED.
+
+**Authentication** (`test_auth.py`) — the real login/session flow end-to-end against an unmocked dependency (not the overridden one `test_api.py` uses for every other test): login with the seeded demo officer, rejection of a wrong password and an unknown badge ID with the same error either way, a protected route rejecting a missing/garbage token, a real issued token authenticating a protected route, and the `/uploads` route accepting the session token as either an `Authorization` header or a `?token=` query parameter.
 
 **MRZ** (`test_mrz.py`) — 7-3-1 check digit algorithm, TD3 parsing, tamper detection, and the filler-run reconstruction fix that recovers correct checksums from under-counted OCR output.
 
@@ -323,7 +326,9 @@ The project is built specifically under the **Blockchain & Cybersecurity** theme
 - **Multi-Signal Forensics:** Dual-domain ELA and Laplacian edge discontinuity detection prevents digital impersonation.
 - **Sandboxed Watchlists:** Air-gapped in-memory mock database prevents accidental leaks or live government queries.
 
-  **Honest scope of access control, stated with the same bar as the encryption-key caveat above:** there is no user account system, no login, and no per-officer identity — every audit-trail entry is attributed to a hardcoded `OFFICER-DEMO-01`. A single shared `OFFICER_API_KEY` (`backend/app/core/config.py`) gates only the two most sensitive, irreversible actions — permanent case deletion and the biometric purge protocol — against a bare, credential-free request; since the frontend must embed this key to call those endpoints, it's a shared secret visible in the frontend bundle, not a real access-control boundary against a determined attacker. Every other route, including case detail and the decrypt-and-stream `/uploads` route serving document/face images, has no authentication at all. This is a single-tenant demo decision, not an oversight to be quietly patched — see [`KNOWN_LIMITATIONS.md` §6](KNOWN_LIMITATIONS.md#6-no-per-officer-authentication) for what real per-officer auth would require. **Do not deploy this against real traveler data without adding it first.**
+  **Real per-officer authentication:** every route — not just case deletion and biometric purge — requires a logged-in `Officer` (`POST /api/auth/login`, bcrypt-hashed password, JWT session, see `backend/app/api/deps.py`'s `get_current_officer`). Audit-trail entries (`CASE_VIEWED`, `DOCUMENT_UPLOADED`, `OFFICER_DECISION_RECORDED`, etc.) record the real authenticated officer's badge ID, not a hardcoded string. One demo account (`OFFICER-DEMO-01`) is auto-seeded on first boot from `DEFAULT_OFFICER_PASSWORD` — same "real default so the app runs out of the box" tradeoff as `SECRET_KEY`/`BIOMETRIC_ENCRYPTION_KEY` above.
+
+  **Honest scope of this, stated with the same bar as the encryption-key caveat above:** this is single-tenant demo identity, not a production auth system — one seeded account, no self-registration or admin UI, no role-based access control (every officer can do everything), no password reset/MFA/lockout, and no server-side session revocation (a token is valid until its 12-hour expiry, full stop). The decrypt-and-stream `/uploads` route also accepts the session token as a `?token=` query parameter (not just an `Authorization` header), since an `<img src="...">` tag can't attach custom headers — a real, if minor, exposure (query strings can land in access logs) that a hardened deployment would close with short-lived signed URLs instead. See [`KNOWN_LIMITATIONS.md` §6](KNOWN_LIMITATIONS.md#6-per-officer-authentication-exists-now-but-with-real-stated-limits) for the full list. **Do not deploy this against real traveler data without adding real identity-provider integration and RBAC first.**
 
 ---
 

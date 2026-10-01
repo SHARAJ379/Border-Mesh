@@ -5,6 +5,7 @@ import { RiskBadge } from './RiskBadge';
 import { SectionHeading } from './SectionHeading';
 import { ScrollReveal } from './ScrollReveal';
 import { prefersReducedMotion } from '../lib/deviceCapability';
+import { appendToken } from '../lib/auth';
 
 interface FaceVerificationProps {
   faceResult?: FaceVerificationResult;
@@ -64,7 +65,7 @@ export const FaceVerification: React.FC<FaceVerificationProps> = ({ faceResult }
           <div className="photo-shadow border border-hairline w-full max-w-xs mx-auto aspect-[3/4] bg-paper-dim flex items-center justify-center overflow-hidden">
             {faceResult.document_face_url ? (
               <img
-                src={faceResult.document_face_url}
+                src={appendToken(faceResult.document_face_url)}
                 alt="Document Portrait"
                 className="w-full h-full object-cover"
               />
@@ -82,7 +83,7 @@ export const FaceVerification: React.FC<FaceVerificationProps> = ({ faceResult }
           <div className="photo-shadow border border-hairline w-full max-w-xs mx-auto aspect-[3/4] bg-paper-dim flex items-center justify-center overflow-hidden">
             {faceResult.live_face_url ? (
               <img
-                src={faceResult.live_face_url}
+                src={appendToken(faceResult.live_face_url)}
                 alt="Live Subject"
                 className="w-full h-full object-cover"
               />

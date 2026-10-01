@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import Optional, List, Dict
 
-from app.api.deps import get_db, require_officer_auth
-from app.models import Case, DocumentAnalysis, RiskCheck, AuditLog, FaceEmbeddingGallery
+from app.api.deps import get_db, get_current_officer
+from app.models import Case, DocumentAnalysis, RiskCheck, AuditLog, FaceEmbeddingGallery, Officer
 from app.schemas import CaseOut, CaseDetailOut, OfficerDecisionRequest, RiskCheckOut, AuditLogOut, PurgeBiometricsResponse
 from app.services.audit_service import AuditService
 
@@ -21,7 +21,8 @@ def list_cases(
     country: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _officer: Officer = Depends(get_current_officer),
 ):
     """Lists screening cases with optional risk/status filters."""
     query = db.query(Case)
@@ -61,18 +62,20 @@ def list_cases(
 
 
 @router.get("/{case_id}", response_model=CaseDetailOut)
-def get_case(case_id: str, db: Session = Depends(get_db)):
+def get_case(case_id: str, db: Session = Depends(get_db), current_officer: Officer = Depends(get_current_officer)):
     """Retrieves full case file details including analyses, risk signals, and audit timeline."""
     case = db.query(Case).filter(Case.id == case_id).first()
     if not case:
         raise HTTPException(status_code=404, detail="Case not found.")
 
-    # Record CASE_VIEWED audit log
+    # Record CASE_VIEWED audit log, attributed to whoever is actually
+    # logged in -- this used to be hardcoded to "OFFICER-DEMO-01" regardless
+    # of who (or whether anyone) was authenticated.
     AuditService.log(
         db=db,
         action="CASE_VIEWED",
         case_id=case.id,
-        actor="OFFICER-DEMO-01",
+        actor=current_officer.badge_id,
         metadata={"case_number": case.case_number}
     )
 
@@ -80,14 +83,14 @@ def get_case(case_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{case_id}/checks", response_model=List[RiskCheckOut])
-def get_case_checks(case_id: str, db: Session = Depends(get_db)):
+def get_case_checks(case_id: str, db: Session = Depends(get_db), _officer: Officer = Depends(get_current_officer)):
     """Returns every itemized risk check (pass, fail, or note) recorded for a specific case."""
     checks = db.query(RiskCheck).filter(RiskCheck.case_id == case_id).all()
     return checks
 
 
 @router.get("/{case_id}/audit", response_model=List[AuditLogOut])
-def get_case_audit_trail(case_id: str, db: Session = Depends(get_db)):
+def get_case_audit_trail(case_id: str, db: Session = Depends(get_db), _officer: Officer = Depends(get_current_officer)):
     """Returns the chronological audit trail for a specific case."""
     logs = db.query(AuditLog).filter(AuditLog.case_id == case_id).order_by(AuditLog.timestamp.asc()).all()
     return logs
@@ -97,7 +100,8 @@ def get_case_audit_trail(case_id: str, db: Session = Depends(get_db)):
 def record_officer_decision(
     case_id: str,
     payload: OfficerDecisionRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_officer: Officer = Depends(get_current_officer),
 ):
     """
     Records human officer decision: 'CLEARED', 'REQUIRES_INSPECTION', 'ESCALATED' with notes.
@@ -117,12 +121,16 @@ def record_officer_decision(
     db.commit()
     db.refresh(case)
 
-    # Log audit event
+    # Log audit event, attributed to the real authenticated officer -- not
+    # `payload.officer_id`, which was a free-text field the CLIENT supplied
+    # (a browser could claim to be any officer it wanted; the audit trail's
+    # whole point is non-repudiation, which a client-trusted identity field
+    # cannot provide).
     AuditService.log(
         db=db,
         action="OFFICER_DECISION_RECORDED",
         case_id=case.id,
-        actor=payload.officer_id,
+        actor=current_officer.badge_id,
         metadata={
             "decision": payload.decision,
             "notes": payload.notes
@@ -133,7 +141,7 @@ def record_officer_decision(
 
 
 @router.post("/{case_id}/purge-biometrics", response_model=PurgeBiometricsResponse)
-def purge_case_biometrics(case_id: str, db: Session = Depends(get_db), _auth: None = Depends(require_officer_auth)):
+def purge_case_biometrics(case_id: str, db: Session = Depends(get_db), current_officer: Officer = Depends(get_current_officer)):
     """
     Privacy-by-Design & GDPR Article 17 Biometric Purge Protocol:
     Permanently deletes all raw biometric artifacts (document scan, live facial capture,
@@ -185,7 +193,11 @@ def purge_case_biometrics(case_id: str, db: Session = Depends(get_db), _auth: No
     db.commit()
     db.refresh(case)
 
-    # Log immutable cryptographically chained audit event
+    # Log immutable cryptographically chained audit event. Action stays
+    # attributed to the automated protocol itself (it does the actual file
+    # deletion, not the officer directly) -- but now records which officer
+    # triggered it, which the old shared-API-key gate had no identity to
+    # provide at all.
     audit_entry = AuditService.log(
         db=db,
         action="BIOMETRICS_PURGED",
@@ -195,7 +207,8 @@ def purge_case_biometrics(case_id: str, db: Session = Depends(get_db), _auth: No
             "protocol": "GDPR-Art17-Privacy-by-Design",
             "purged_files_count": purged_files_count,
             "case_number": case.case_number,
-            "retained_metadata": "Anonymized hash and risk score only"
+            "retained_metadata": "Anonymized hash and risk score only",
+            "triggered_by": current_officer.badge_id,
         }
     )
 
@@ -209,7 +222,7 @@ def purge_case_biometrics(case_id: str, db: Session = Depends(get_db), _auth: No
 
 
 @router.delete("/{case_id}")
-def delete_case_privacy(case_id: str, db: Session = Depends(get_db), _auth: None = Depends(require_officer_auth)):
+def delete_case_privacy(case_id: str, db: Session = Depends(get_db), _officer: Officer = Depends(get_current_officer)):
     """
     Privacy-by-Design requirement: Allows demo data deletion and scrubbing of associated biometric files.
     """

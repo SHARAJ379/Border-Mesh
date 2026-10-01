@@ -1,73 +1,82 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { api } from './api';
+import { setSession, clearSession, getToken, getOfficer } from '../lib/auth';
 
-const OFFICER_KEY_STORAGE = 'bordermesh_officer_key';
-
-describe('officer-gated requests', () => {
+describe('per-officer session auth', () => {
   beforeEach(() => {
-    sessionStorage.clear();
+    localStorage.clear();
     vi.restoreAllMocks();
   });
 
   afterEach(() => {
-    sessionStorage.clear();
+    localStorage.clear();
   });
 
-  it('prompts for the officer password and sends it as X-API-Key when none is stored yet', async () => {
-    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('correct-password');
+  it('login() stores the returned token and officer on success', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          access_token: 'a-real-looking-jwt',
+          token_type: 'bearer',
+          officer: { badge_id: 'OFFICER-DEMO-01', full_name: 'Demo Officer' }
+        }),
+        { status: 200 }
+      )
+    );
+
+    const { officer } = await api.login('OFFICER-DEMO-01', 'correct-password');
+
+    expect(officer.badge_id).toBe('OFFICER-DEMO-01');
+    expect(getToken()).toBe('a-real-looking-jwt');
+    expect(getOfficer()?.full_name).toBe('Demo Officer');
+  });
+
+  it('login() throws and stores nothing on a 401', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'Invalid badge ID or password.' }), { status: 401 })
+    );
+
+    await expect(api.login('OFFICER-DEMO-01', 'wrong')).rejects.toThrow(/invalid badge/i);
+    expect(getToken()).toBeNull();
+  });
+
+  it('attaches the stored session token as an Authorization header on every authenticated call', async () => {
+    setSession('a-real-looking-jwt', { badge_id: 'OFFICER-DEMO-01', full_name: 'Demo Officer' });
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response(JSON.stringify({ message: 'ok' }), { status: 200 }));
+      .mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }));
 
-    await api.deleteCase('case-1');
+    await api.listCases();
 
-    expect(promptSpy).toHaveBeenCalledTimes(1);
     const [, options] = fetchSpy.mock.calls[0];
-    expect((options?.headers as Record<string, string>)['X-API-Key']).toBe('correct-password');
+    expect((options?.headers as Record<string, string>).Authorization).toBe('Bearer a-real-looking-jwt');
   });
 
-  it('reuses the session-stored password on a later officer-gated call without re-prompting', async () => {
-    sessionStorage.setItem(OFFICER_KEY_STORAGE, 'already-entered');
-    const promptSpy = vi.spyOn(window, 'prompt');
+  it('sends no Authorization header when there is no stored session', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response(JSON.stringify({ message: 'ok' }), { status: 200 }));
+      .mockResolvedValue(new Response(JSON.stringify([]), { status: 401 }));
 
-    await api.deleteCase('case-1');
+    await api.listCases().catch(() => {});
 
-    expect(promptSpy).not.toHaveBeenCalled();
     const [, options] = fetchSpy.mock.calls[0];
-    expect((options?.headers as Record<string, string>)['X-API-Key']).toBe('already-entered');
+    expect((options?.headers as Record<string, string> | undefined)?.Authorization).toBeUndefined();
   });
 
-  it('drops a stale stored password and re-prompts exactly once when the server rejects it with 401', async () => {
-    sessionStorage.setItem(OFFICER_KEY_STORAGE, 'stale-password');
-    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('fresh-password');
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'Missing or invalid X-API-Key for this action.' }), { status: 401 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ message: 'ok' }), { status: 200 }));
+  it('clears the stored session when the server responds 401 (expired/invalid token)', async () => {
+    setSession('a-stale-jwt', { badge_id: 'OFFICER-DEMO-01', full_name: 'Demo Officer' });
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'Session expired or invalid.' }), { status: 401 })
+    );
 
-    await api.deleteCase('case-1');
+    await api.listCases().catch(() => {});
 
-    expect(promptSpy).toHaveBeenCalledTimes(1);
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
-    const [, retryOptions] = fetchSpy.mock.calls[1];
-    expect((retryOptions?.headers as Record<string, string>)['X-API-Key']).toBe('fresh-password');
-    expect(sessionStorage.getItem(OFFICER_KEY_STORAGE)).toBe('fresh-password');
+    expect(getToken()).toBeNull();
+    expect(getOfficer()).toBeNull();
   });
 
-  it('never calls fetch at all if the officer cancels the password prompt', async () => {
-    vi.spyOn(window, 'prompt').mockReturnValue(null);
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
-
-    await expect(api.deleteCase('case-1')).rejects.toThrow(/officer authorization/i);
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it('applies the same officer-key handling to biometric purge, chain anchoring, and policy updates', async () => {
-    sessionStorage.setItem(OFFICER_KEY_STORAGE, 'shared-session-password');
-    const promptSpy = vi.spyOn(window, 'prompt');
+  it('applies the same session-header handling to every previously officer-gated action', async () => {
+    setSession('shared-session-token', { badge_id: 'OFFICER-DEMO-01', full_name: 'Demo Officer' });
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockImplementation(async () => new Response(JSON.stringify({ message: 'ok' }), { status: 200 }));
@@ -75,12 +84,32 @@ describe('officer-gated requests', () => {
     await api.purgeBiometrics('case-1');
     await api.anchorAuditChain();
     await api.updatePolicy({} as any);
+    await api.deleteCase('case-1');
 
-    expect(promptSpy).not.toHaveBeenCalled();
-    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    expect(fetchSpy).toHaveBeenCalledTimes(4);
     for (const call of fetchSpy.mock.calls) {
       const [, options] = call;
-      expect((options?.headers as Record<string, string>)['X-API-Key']).toBe('shared-session-password');
+      expect((options?.headers as Record<string, string>).Authorization).toBe('Bearer shared-session-token');
     }
+  });
+
+  it('logout() clears the stored session', () => {
+    setSession('a-token', { badge_id: 'OFFICER-DEMO-01', full_name: 'Demo Officer' });
+    api.logout();
+    expect(getToken()).toBeNull();
+  });
+});
+
+describe('clearSession / setSession', () => {
+  afterEach(() => localStorage.clear());
+
+  it('round-trips a session through localStorage', () => {
+    setSession('tok', { badge_id: 'B-1', full_name: 'Someone' });
+    expect(getToken()).toBe('tok');
+    expect(getOfficer()).toEqual({ badge_id: 'B-1', full_name: 'Someone' });
+
+    clearSession();
+    expect(getToken()).toBeNull();
+    expect(getOfficer()).toBeNull();
   });
 });

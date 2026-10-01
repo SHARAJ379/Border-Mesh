@@ -1,9 +1,12 @@
+import contextlib
 import uuid
 import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 from app.main import app
 from app.core.config import settings
+from app.api.deps import get_current_officer
+from app.models import Officer
 
 # Starlette's TestClient only runs the app's lifespan (startup/shutdown --
 # here, Base.metadata.create_all plus initial seeding) when entered as a
@@ -14,14 +17,48 @@ from app.core.config import settings
 _client_cm = TestClient(app)
 client = _client_cm.__enter__()
 
-# Case deletion and biometric purge require this header (see
-# app.api.deps.require_officer_auth) -- tests of the legitimate authenticated
-# flow for either endpoint must send it.
-OFFICER_AUTH_HEADERS = {"X-API-Key": settings.OFFICER_API_KEY}
+# Every route now requires a real logged-in Officer (see
+# app.api.deps.get_current_officer) -- overriding the dependency itself,
+# rather than performing a real login handshake in every single test,
+# keeps this whole suite's existing call sites unchanged: FastAPI's
+# dependency_overrides machinery swaps in this fixed officer for every
+# request through `client`, with zero per-request auth bookkeeping needed.
+# The handful of tests that specifically verify auth REJECTION (below) pop
+# this override for the duration of their negative assertions, via
+# `_no_officer_auth()`.
+_TEST_OFFICER = Officer(
+    id="test-officer-id", badge_id="OFFICER-DEMO-01", full_name="Test Officer",
+    password_hash="unused-under-the-override", is_active=True,
+)
+app.dependency_overrides[get_current_officer] = lambda: _TEST_OFFICER
+
+# No longer a real header (the override above authenticates every request
+# regardless) -- kept as an empty dict purely so the many pre-existing
+# `headers=OFFICER_AUTH_HEADERS` call sites below don't all need editing;
+# an empty headers dict is a no-op.
+OFFICER_AUTH_HEADERS = {}
+
+
+@contextlib.contextmanager
+def _no_officer_auth():
+    """Temporarily removes the auth override so a request actually exercises
+    get_current_officer's real rejection path (missing/invalid token), then
+    restores it -- every other test in this module expects to be
+    auto-authenticated."""
+    app.dependency_overrides.pop(get_current_officer, None)
+    try:
+        yield
+    finally:
+        app.dependency_overrides[get_current_officer] = lambda: _TEST_OFFICER
 
 
 def teardown_module(module):
     _client_cm.__exit__(None, None, None)
+    # `app` is a module-level singleton shared with every other test file
+    # that imports it (test_auth.py in particular) -- an override left in
+    # place here would silently auto-authenticate requests those other
+    # modules deliberately expect to be rejected.
+    app.dependency_overrides.pop(get_current_officer, None)
 
 def test_health_check_endpoint():
     response = client.get("/api/health")
@@ -637,11 +674,12 @@ def test_anchor_audit_chain_rejects_unauthenticated_requests(monkeypatch):
     fake = _FakeAnchorService()
     monkeypatch.setattr("app.api.routes.audit.get_blockchain_anchor_service", lambda: fake)
 
-    no_auth_res = client.post("/api/audit/anchor")
-    assert no_auth_res.status_code == 401
+    with _no_officer_auth():
+        no_auth_res = client.post("/api/audit/anchor")
+        assert no_auth_res.status_code == 401
 
-    wrong_auth_res = client.post("/api/audit/anchor", headers={"X-API-Key": "definitely-not-the-real-key"})
-    assert wrong_auth_res.status_code == 401
+        wrong_auth_res = client.post("/api/audit/anchor", headers={"Authorization": "Bearer definitely-not-a-real-token"})
+        assert wrong_auth_res.status_code == 401
 
     assert fake.anchored_hashes == []  # rejected requests must never reach the chain call
 
@@ -653,7 +691,7 @@ def test_anchor_audit_chain_publishes_the_real_head_hash_and_persists_a_record(m
     verify_before = client.get("/api/audit/verify").json()
     expected_head_hash = verify_before["head_hash"]
 
-    res = client.post("/api/audit/anchor", headers=OFFICER_AUTH_HEADERS)
+    res = client.post("/api/audit/anchor")
     assert res.status_code == 200
     data = res.json()
 
@@ -878,48 +916,50 @@ def test_purge_biometrics_rejects_unauthenticated_requests():
     assert demo_res.status_code == 200
     case_id = demo_res.json()["case_id"]
 
-    no_auth_res = client.post(f"/api/cases/{case_id}/purge-biometrics")
-    assert no_auth_res.status_code == 401
+    with _no_officer_auth():
+        no_auth_res = client.post(f"/api/cases/{case_id}/purge-biometrics")
+        assert no_auth_res.status_code == 401
 
-    wrong_auth_res = client.post(
-        f"/api/cases/{case_id}/purge-biometrics",
-        headers={"X-API-Key": "definitely-not-the-real-key"},
-    )
-    assert wrong_auth_res.status_code == 401
+        wrong_auth_res = client.post(
+            f"/api/cases/{case_id}/purge-biometrics",
+            headers={"Authorization": "Bearer definitely-not-a-real-token"},
+        )
+        assert wrong_auth_res.status_code == 401
 
     # Confirm the rejected requests didn't actually purge anything.
     case_res = client.get(f"/api/cases/{case_id}")
     assert case_res.json()["biometrics_purged"] is False
 
-    # The correct key must still be able to perform the action -- this
-    # isn't rejecting everything indiscriminately.
-    ok_res = client.post(f"/api/cases/{case_id}/purge-biometrics", headers=OFFICER_AUTH_HEADERS)
+    # A real logged-in officer must still be able to perform the action --
+    # this isn't rejecting everything indiscriminately.
+    ok_res = client.post(f"/api/cases/{case_id}/purge-biometrics")
     assert ok_res.status_code == 200
 
 def test_delete_case_rejects_unauthenticated_requests():
     """
     Case deletion is permanent and unrecoverable. Before this fix it had no
-    auth check at all. A request with no (or a wrong) X-API-Key must be
+    auth check at all. A request with no (or an invalid) session must be
     rejected, and the case must still exist afterward.
     """
     demo_res = client.post("/api/demo/scenario", json={"scenario_key": "genuine"})
     assert demo_res.status_code == 200
     case_id = demo_res.json()["case_id"]
 
-    no_auth_res = client.delete(f"/api/cases/{case_id}")
-    assert no_auth_res.status_code == 401
+    with _no_officer_auth():
+        no_auth_res = client.delete(f"/api/cases/{case_id}")
+        assert no_auth_res.status_code == 401
 
-    wrong_auth_res = client.delete(
-        f"/api/cases/{case_id}", headers={"X-API-Key": "definitely-not-the-real-key"}
-    )
-    assert wrong_auth_res.status_code == 401
+        wrong_auth_res = client.delete(
+            f"/api/cases/{case_id}", headers={"Authorization": "Bearer definitely-not-a-real-token"}
+        )
+        assert wrong_auth_res.status_code == 401
 
     # Confirm the case still exists.
     case_res = client.get(f"/api/cases/{case_id}")
     assert case_res.status_code == 200
 
-    # The correct key must still be able to perform the action.
-    ok_res = client.delete(f"/api/cases/{case_id}", headers=OFFICER_AUTH_HEADERS)
+    # A real logged-in officer must still be able to perform the action.
+    ok_res = client.delete(f"/api/cases/{case_id}")
     assert ok_res.status_code == 200
     assert client.get(f"/api/cases/{case_id}").status_code == 404
 
@@ -949,15 +989,16 @@ def test_update_policy_rejects_unauthenticated_requests():
         "threshold_low": 99, "threshold_medium": 99.5, "threshold_high": 99.9
     }
 
-    no_auth_res = client.post("/api/settings/policy", json=hostile_policy)
-    assert no_auth_res.status_code == 401
+    with _no_officer_auth():
+        no_auth_res = client.post("/api/settings/policy", json=hostile_policy)
+        assert no_auth_res.status_code == 401
 
-    wrong_auth_res = client.post(
-        "/api/settings/policy",
-        json=hostile_policy,
-        headers={"X-API-Key": "definitely-not-the-real-key"},
-    )
-    assert wrong_auth_res.status_code == 401
+        wrong_auth_res = client.post(
+            "/api/settings/policy",
+            json=hostile_policy,
+            headers={"Authorization": "Bearer definitely-not-a-real-token"},
+        )
+        assert wrong_auth_res.status_code == 401
 
     # Confirm the rejected requests didn't actually change the live policy.
     db = SessionLocal()
@@ -1343,7 +1384,7 @@ def test_dpdp_compliance_status_reflects_real_backend_state():
     assert "Fernet" in data["encryption"]["algorithm"]
     assert isinstance(data["encryption"]["using_default_demo_key"], bool)
     assert "SHA-256" in data["identifier_hashing"]["algorithm"]
-    assert len(data["access_control"]["officer_key_required_for"]) > 0
+    assert len(data["access_control"]["authentication_required_for"]) > 0
     assert len(data["known_gaps"]) > 0
     assert any("audit" in gap["gap"].lower() for gap in data["known_gaps"])
 

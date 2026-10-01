@@ -2,7 +2,7 @@ import logging
 import mimetypes
 import os
 import sys
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -11,7 +11,9 @@ from app.core.config import settings, default_secrets_still_in_use
 logger = logging.getLogger("bordermesh.startup")
 from app.core.database import Base, engine, SessionLocal
 from app.core.encryption import decrypt_bytes
-from app.api.routes import health, screening, cases, dashboard, demo, audit, settings as settings_routes, compliance
+from app.core.security import hash_password
+from app.api.deps import get_current_officer
+from app.api.routes import health, screening, cases, dashboard, demo, audit, settings as settings_routes, compliance, auth
 
 from contextlib import asynccontextmanager
 
@@ -40,6 +42,23 @@ async def lifespan(app: FastAPI):
     try:
         from app.services.watchlist_service import ensure_seeded
         ensure_seeded(db)
+
+        from app.models import Officer
+        if db.query(Officer).count() == 0:
+            # First boot: seed the one demo officer account so the app is
+            # usable out of the box (same tradeoff as every other checked-in
+            # demo default on this page -- see DEFAULT_OFFICER_PASSWORD's own
+            # comment in config.py). Real deployments add real officers
+            # (there is no self-registration endpoint, deliberately -- an
+            # account on a border-screening system isn't self-service) and
+            # should rotate/remove this one.
+            db.add(Officer(
+                badge_id="OFFICER-DEMO-01",
+                full_name="Demo Officer",
+                password_hash=hash_password(settings.DEFAULT_OFFICER_PASSWORD),
+            ))
+            db.commit()
+            print("[BorderMesh] Seeded default officer account OFFICER-DEMO-01.")
 
         from app.models import Case
         case_count = db.query(Case).count()
@@ -97,7 +116,16 @@ os.makedirs(uploads_path, exist_ok=True)
 
 
 @app.get("/uploads/{file_path:path}")
-def serve_encrypted_upload(file_path: str):
+def serve_encrypted_upload(file_path: str, _officer=Depends(get_current_officer)):
+    """
+    Every document scan, live face capture, extracted face crop, and tamper
+    heatmap lives behind this route -- previously it had no auth at all,
+    meaning anyone who could reach the API could read any case's biometric
+    images by guessing/enumerating filenames. Now requires the same real
+    officer login as every other route (see get_current_officer's own
+    docstring for why this one specifically also accepts the token as a
+    query parameter, not just the Authorization header).
+    """
     requested_path = os.path.normpath(os.path.join(uploads_path, file_path))
     # Path-traversal guard StaticFiles handled for free -- a "../" segment
     # must never resolve outside uploads_path.
@@ -122,6 +150,7 @@ app.mount("/verify", StaticFiles(directory=verify_page_path, html=True), name="v
 
 # Include Routers
 app.include_router(health.router, prefix=settings.API_V1_STR)
+app.include_router(auth.router, prefix=settings.API_V1_STR)
 app.include_router(screening.router, prefix=settings.API_V1_STR)
 app.include_router(cases.router, prefix=settings.API_V1_STR)
 app.include_router(dashboard.router, prefix=settings.API_V1_STR)

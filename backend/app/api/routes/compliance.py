@@ -2,9 +2,9 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_db, get_current_officer
 from app.core.config import settings
-from app.models import Case, AuditLog
+from app.models import Case, AuditLog, Officer
 from app.services.audit_service import AuditService
 
 router = APIRouter(prefix="/compliance", tags=["compliance"])
@@ -25,7 +25,7 @@ _DEFAULT_DEMO_ENCRYPTION_KEY = "GIdlRJ4jkqQin6vgx8uDRtGQ2EXnGhbd_jIXGEjS848="
 
 
 @router.get("/dpdp-status")
-def dpdp_compliance_status(db: Session = Depends(get_db)):
+def dpdp_compliance_status(db: Session = Depends(get_db), _officer: Officer = Depends(get_current_officer)):
     """
     Read-only status view mapping this app's ALREADY-IMPLEMENTED privacy/
     security controls to the DPDP Act 2023 principles they actually serve --
@@ -73,12 +73,20 @@ def dpdp_compliance_status(db: Session = Depends(get_db)):
             "reason": chain["reason"],
         },
         "access_control": {
-            "mechanism": "X-API-Key header, checked against a configured officer key",
-            "officer_key_required_for": [
+            "mechanism": "Per-officer login (JWT bearer token, see /api/auth/login)",
+            "authentication_required_for": [
+                "every case-data route (list, detail, checks, audit trail)",
+                "the /uploads image-serving route",
+                "every screening-pipeline step and demo scenario",
                 "case deletion",
                 "biometric purge",
                 "policy settings update",
                 "blockchain anchoring",
+            ],
+            "public_without_login": [
+                "GET /api/audit/anchor-proof/{case_number} (the standalone /verify page)",
+                "GET /api/audit/anchors (already public on-chain once anchored)",
+                "GET /api/health",
             ],
         },
         "known_gaps": [

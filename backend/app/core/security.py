@@ -3,9 +3,16 @@ import re
 import os
 import uuid
 import io
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Optional
+
+import bcrypt
+import jwt
 from fastapi import HTTPException
 from PIL import Image, UnidentifiedImageError
+
+from app.core.config import settings
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 MAX_FILE_SIZE = 10 * 1024 * 1024 # 10 MB
@@ -77,3 +84,52 @@ def validate_image_upload(filename: str, file_size: int, contents: bytes = None)
                 status_code=400,
                 detail=f"Uploaded file's actual content ({detected_format}) does not match an allowed image type."
             )
+
+
+# --- Officer authentication (password hashing + JWT) -----------------------
+# Replaces the old single shared OFFICER_API_KEY (see config.py's own
+# comment on ACCESS_TOKEN_EXPIRE_MINUTES) with real per-officer login.
+
+JWT_ALGORITHM = "HS256"
+
+
+def hash_password(plain_password: str) -> str:
+    """bcrypt, not a faster general-purpose hash (SHA-256 etc.) -- bcrypt's
+    deliberate slowness and built-in per-hash salt are exactly what a
+    password hash needs and a generic hash doesn't provide; hash_identifier
+    above is for document numbers (needs to be fast and must not be
+    salted, since it's used as a lookup/index key), a completely different
+    requirement from a credential."""
+    return bcrypt.hashpw(plain_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verify_password(plain_password: str, password_hash: str) -> bool:
+    try:
+        return bcrypt.checkpw(plain_password.encode("utf-8"), password_hash.encode("utf-8"))
+    except ValueError:
+        # Malformed/legacy hash -- fail closed, not a 500.
+        return False
+
+
+def create_access_token(badge_id: str) -> str:
+    """Signs a JWT with SECRET_KEY (HS256) carrying the officer's badge_id
+    as `sub` and an expiry -- see app.api.deps.get_current_officer for the
+    verifying half."""
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": badge_id,
+        "iat": now,
+        "exp": now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    }
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+
+def decode_access_token(token: str) -> Optional[str]:
+    """Returns the badge_id (`sub` claim) from a valid, unexpired token, or
+    None for anything invalid/expired/malformed -- callers turn None into
+    a 401, never an exception bubbling out of a dependency."""
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[JWT_ALGORITHM])
+    except jwt.PyJWTError:
+        return None
+    return payload.get("sub")

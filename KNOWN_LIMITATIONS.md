@@ -197,21 +197,53 @@ actually fix this is gated behind a license we don't have."
 
 ---
 
-## 6. No per-officer authentication
+## 6. Per-officer authentication exists now, but with real, stated limits
 
-There is no user account system, no login, no per-officer identity at all.
-Every officer-attributed action in the audit trail is hardcoded
-(`actor="OFFICER-DEMO-01"`). The only access control that exists is a single
-static shared API key (`OFFICER_API_KEY`), and it only gates two specific
-destructive endpoints — case deletion and the GDPR biometric purge — not
-general use of the system. Anyone with that one key can perform either
-action; there is no way to attribute which real officer did it, no
-per-officer permissions, no session management.
+**Updated 2026-10-01 — this used to say there was no login at all (a single
+shared `OFFICER_API_KEY` gated 2 destructive endpoints and nothing else).
+That's now built: real `Officer` accounts, bcrypt-hashed passwords, JWT
+sessions (`POST /api/auth/login`), and every route in the app — not just the
+2 destructive ones — requires a valid session (see
+`backend/app/api/deps.py`'s `get_current_officer`). Audit-trail attribution
+(`CASE_VIEWED`, `DOCUMENT_UPLOADED`, `OFFICER_DECISION_RECORDED`, etc.) now
+records the real logged-in officer's badge ID, not a hardcoded string.**
 
-**If asked directly:** "There's no per-officer auth — one shared key gates
-just the two destructive operations. A real deployment needs a real identity
-provider and per-officer audit attribution; this is a single-tenant demo
-posture."
+What's real: password hashing (bcrypt, not reversible), signed/expiring
+tokens (JWT, HS256, 12-hour expiry), and a real 401 on every route for a
+missing/invalid/expired session — confirmed with real end-to-end tests
+(`backend/tests/test_auth.py`), not just unit tests of the dependency.
+
+What's still a real, stated gap, not production-grade identity:
+
+- **No self-registration or officer-management UI.** One demo account
+  (`OFFICER-DEMO-01`) is auto-seeded on first boot from
+  `DEFAULT_OFFICER_PASSWORD` (same "real default so the demo runs out of the
+  box" tradeoff as `SECRET_KEY`/`BIOMETRIC_ENCRYPTION_KEY` — see
+  `default_secrets_still_in_use`'s enforcement). Adding more officers today
+  means inserting rows directly; there's no admin screen, deliberately —
+  that's a real feature to build, not a quick patch.
+- **No RBAC.** Every authenticated officer can do everything (view any case,
+  delete any case, change policy weights). A real deployment needs roles
+  (e.g. an officer who can screen but not delete, a supervisor who can).
+- **No password reset, no MFA, no account lockout after failed attempts,
+  no audit of failed login attempts themselves.** All standard real-identity-
+  system features this doesn't have.
+- **The `/uploads` image route accepts the session token as a `?token=`
+  query parameter**, not just an `Authorization` header — necessary because
+  an `<img src="...">` tag can't attach custom headers, but a query-string
+  token can leak into server access logs or a `Referer` header in a way a
+  header never would. Mitigated by the 12-hour token expiry, not eliminated.
+  A hardened deployment would issue short-lived, single-resource signed URLs
+  instead.
+- **No session revocation.** A JWT is valid until it expires; there is no
+  server-side "log this officer out everywhere" (a stolen token works until
+  its 12-hour expiry, full stop).
+
+**If asked directly:** "Per-officer login is real now — not a shared key —
+but it's a single-tenant demo identity system: one seeded account, no roles,
+no account lifecycle management, no session revocation. A real deployment
+needs a real identity provider (SSO/OIDC) and role-based access control on
+top of what exists today."
 
 ---
 

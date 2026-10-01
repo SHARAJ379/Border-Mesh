@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc, or_
 from typing import Optional, List, Dict, Any
 
-from app.api.deps import get_db, require_officer_auth
-from app.models import AuditLog, BlockchainAnchor
+from app.api.deps import get_db, get_current_officer
+from app.models import AuditLog, BlockchainAnchor, Officer
 from app.schemas import AuditLogOut, ChainVerificationOut, BlockchainAnchorOut, CaseAnchorProofOut
 from app.services.audit_service import AuditService
 from app.services.blockchain_anchor_service import get_blockchain_anchor_service, AnchorConfigurationError
@@ -19,7 +19,8 @@ def list_audit_logs(
     search: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _officer: Officer = Depends(get_current_officer),
 ):
     """
     Centralized, paginated query of immutable blockchain-style audit ledger events.
@@ -48,7 +49,7 @@ def list_audit_logs(
 
 
 @router.get("/verify", response_model=ChainVerificationOut)
-def verify_audit_ledger_integrity(db: Session = Depends(get_db)):
+def verify_audit_ledger_integrity(db: Session = Depends(get_db), _officer: Officer = Depends(get_current_officer)):
     """
     Cryptographically verifies the entire SHA-256 chain of custody across all audit logs.
     Theme: Blockchain & Cybersecurity — Proves zero unauthorized tampering or log reordering.
@@ -58,7 +59,7 @@ def verify_audit_ledger_integrity(db: Session = Depends(get_db)):
 
 
 @router.get("/cases/{case_id}/verify", response_model=ChainVerificationOut)
-def verify_case_chain_integrity(case_id: str, db: Session = Depends(get_db)):
+def verify_case_chain_integrity(case_id: str, db: Session = Depends(get_db), _officer: Officer = Depends(get_current_officer)):
     """
     Cryptographically verifies the chain of custody for a specific case.
     """
@@ -67,7 +68,7 @@ def verify_case_chain_integrity(case_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/stats")
-def get_audit_ledger_stats(db: Session = Depends(get_db)):
+def get_audit_ledger_stats(db: Session = Depends(get_db), _officer: Officer = Depends(get_current_officer)):
     """
     Returns high-level statistics about the cryptographic audit ledger.
     """
@@ -83,7 +84,7 @@ def get_audit_ledger_stats(db: Session = Depends(get_db)):
 
 
 @router.post("/anchor", response_model=BlockchainAnchorOut)
-def anchor_audit_chain(db: Session = Depends(get_db), _auth: None = Depends(require_officer_auth)):
+def anchor_audit_chain(db: Session = Depends(get_db), current_officer: Officer = Depends(get_current_officer)):
     """
     On-demand: publishes the audit ledger's current head hash to a public
     blockchain testnet (Ethereum Sepolia). The head hash already commits to the
@@ -116,6 +117,7 @@ def anchor_audit_chain(db: Session = Depends(get_db), _auth: None = Depends(requ
         tx_hash=result["tx_hash"],
         block_number=result.get("block_number"),
         explorer_url=result["explorer_url"],
+        anchored_by=current_officer.badge_id,
     )
     db.add(record)
     db.commit()

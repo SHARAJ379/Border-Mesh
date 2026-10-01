@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, ConfigDict
 
-from app.api.deps import get_db, require_officer_auth
+from app.api.deps import get_db, get_current_officer
+from app.models import Officer
 from app.services.policy_service import get_policy, update_policy, PolicyValidationError
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -33,7 +34,7 @@ class PolicyUpdate(BaseModel):
 
 
 @router.get("/policy", response_model=PolicyOut)
-def get_policy_settings(db: Session = Depends(get_db)):
+def get_policy_settings(db: Session = Depends(get_db), _officer: Officer = Depends(get_current_officer)):
     """The risk engine's live weights/thresholds -- what the Settings page's
     sliders actually control."""
     return get_policy(db)
@@ -43,13 +44,13 @@ def get_policy_settings(db: Session = Depends(get_db)):
 def update_policy_settings(
     payload: PolicyUpdate,
     db: Session = Depends(get_db),
-    _auth: None = Depends(require_officer_auth)
+    _officer: Officer = Depends(get_current_officer),
 ):
     # Risk-engine weights/thresholds directly drive every case's
     # LOW/MEDIUM/HIGH/CRITICAL classification (see risk_engine.py) --
     # comparable in impact to case deletion or biometric purge, so this
-    # gets the same X-API-Key gate as those two routes (see
-    # app.api.deps.require_officer_auth).
+    # requires real officer login the same as those two routes (see
+    # app.api.deps.get_current_officer).
     #
     # The weights-sum-to-100% / ascending-thresholds invariant is enforced
     # inside update_policy itself (see policy_service.py) so it holds no

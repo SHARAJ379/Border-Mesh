@@ -21,6 +21,8 @@ requests>=2.32.0
 tqdm>=4.66.0
 web3>=7.0.0
 cryptography>=43.0.0
+pyjwt>=2.9.0
+bcrypt>=4.2.0
 
 # facenet-pytorch is installed separately with --no-deps (see Dockerfile / README):
 # its declared pins (torch<2.3, torchvision<0.18, numpy<2, Pillow<10.3) are years

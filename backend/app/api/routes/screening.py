@@ -6,11 +6,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from app.api.deps import get_db
+from app.api.deps import get_db, get_current_officer
 from app.core.config import settings
 from app.core.security import validate_image_upload, sanitize_filename, hash_identifier
 from app.core.encryption import write_encrypted_file, encrypt_file_in_place, decrypted_tempfile
-from app.models import Case, DocumentAnalysis, RiskCheck, AuditLog
+from app.models import Case, DocumentAnalysis, RiskCheck, AuditLog, Officer
 from app.services.ocr_service import get_ocr_service, TesseractOCRService
 from app.services.mrz_service import MRZService
 from app.services.rules_engine import DocumentRulesEngine
@@ -57,7 +57,8 @@ async def upload_document(
     file: UploadFile = File(...),
     document_type: str = Form("Passport"),
     country: str = Form("Unknown"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_officer: Officer = Depends(get_current_officer),
 ):
     """
     Step 1 of Screening Pipeline:
@@ -100,7 +101,7 @@ async def upload_document(
         db=db,
         action="DOCUMENT_UPLOADED",
         case_id=new_case.id,
-        actor="OFFICER-DEMO-01",
+        actor=current_officer.badge_id,
         metadata={
             "filename": file.filename,
             "file_size": len(contents),
@@ -118,7 +119,7 @@ async def upload_document(
 
 
 @router.post("/{case_id}/ocr")
-def process_ocr(case_id: str, db: Session = Depends(get_db)):
+def process_ocr(case_id: str, db: Session = Depends(get_db), _officer: Officer = Depends(get_current_officer)):
     """
     Step 2: Preprocesses image and runs OCR extraction.
     """
@@ -174,7 +175,7 @@ def process_ocr(case_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/{case_id}/validate")
-def process_mrz_and_validation(case_id: str, db: Session = Depends(get_db)):
+def process_mrz_and_validation(case_id: str, db: Session = Depends(get_db), _officer: Officer = Depends(get_current_officer)):
     """
     Step 3: MRZ Parsing & Document Rules Engine Validation.
     """
@@ -253,7 +254,7 @@ def process_mrz_and_validation(case_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/{case_id}/tamper")
-def process_tamper_analysis(case_id: str, db: Session = Depends(get_db)):
+def process_tamper_analysis(case_id: str, db: Session = Depends(get_db), _officer: Officer = Depends(get_current_officer)):
     """
     Step 4: Forensic Tamper AI (ELA, edge splicing, portrait seam, texture anomalies).
     """
@@ -301,7 +302,8 @@ def process_tamper_analysis(case_id: str, db: Session = Depends(get_db)):
 async def process_face_verification(
     case_id: str,
     file: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _officer: Officer = Depends(get_current_officer),
 ):
     """
     Step 5: Biometric Face Verification between document portrait and live capture.
@@ -377,7 +379,7 @@ async def process_face_verification(
 
 
 @router.post("/{case_id}/risk")
-def process_risk_aggregation(case_id: str, db: Session = Depends(get_db)):
+def process_risk_aggregation(case_id: str, db: Session = Depends(get_db), _officer: Officer = Depends(get_current_officer)):
     """
     Step 6: Central Risk Engine Aggregation & Case File Finalization.
     """

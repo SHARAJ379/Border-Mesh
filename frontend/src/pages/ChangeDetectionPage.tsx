@@ -5,6 +5,7 @@ import { SectionHeading } from '../components/SectionHeading';
 import { RiskBadge } from '../components/RiskBadge';
 import { ScrollReveal } from '../components/ScrollReveal';
 import { GitCompare, Loader2, Play, CheckCircle2, XCircle, ScanFace } from 'lucide-react';
+import { appendToken } from '../lib/auth';
 
 /**
  * Same-Identity Change Detection demo: generates two synthetic specimens
@@ -152,7 +153,7 @@ export const ChangeDetectionPage: React.FC = () => {
                     </span>
                   </div>
                   <div className="photo-shadow border border-hairline bg-paper-dim overflow-hidden">
-                    <img src={version.document_image_url} alt={version.label} className="w-full object-contain" />
+                    <img src={appendToken(version.document_image_url)} alt={version.label} className="w-full object-contain" />
                   </div>
                   <div className="text-[11px] text-muted figure">
                     OCR confidence: {Math.round(version.ocr_confidence * 100)}%
@@ -217,7 +218,7 @@ export const ChangeDetectionPage: React.FC = () => {
                 <div className="photo-shadow border border-hairline w-full max-w-xs mx-auto aspect-[3/4] bg-paper-dim flex items-center justify-center overflow-hidden">
                   {result.portrait_comparison.v1_portrait_url ? (
                     <img
-                      src={result.portrait_comparison.v1_portrait_url}
+                      src={appendToken(result.portrait_comparison.v1_portrait_url)}
                       alt="Version 1 portrait"
                       className="w-full h-full object-cover"
                     />
@@ -231,7 +232,7 @@ export const ChangeDetectionPage: React.FC = () => {
                 <div className="photo-shadow border border-hairline w-full max-w-xs mx-auto aspect-[3/4] bg-paper-dim flex items-center justify-center overflow-hidden">
                   {result.portrait_comparison.v2_portrait_url ? (
                     <img
-                      src={result.portrait_comparison.v2_portrait_url}
+                      src={appendToken(result.portrait_comparison.v2_portrait_url)}
                       alt="Version 2 portrait"
                       className="w-full h-full object-cover"
                     />

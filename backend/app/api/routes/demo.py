@@ -7,11 +7,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import Dict, Any
 
-from app.api.deps import get_db
+from app.api.deps import get_db, get_current_officer
 from app.api.routes.screening import MAX_CASE_NUMBER_ATTEMPTS
 from app.core.config import settings
 from app.core.encryption import encrypt_file_in_place, decrypted_tempfile
-from app.models import Case, DocumentAnalysis, RiskCheck, AuditLog
+from app.models import Case, DocumentAnalysis, RiskCheck, AuditLog, Officer
 from app.utils.synthetic_generator import SyntheticDocumentGenerator
 from app.services.ocr_service import get_ocr_service, TesseractOCRService
 from app.services.mrz_service import MRZService
@@ -41,6 +41,7 @@ SCENARIO_CONFIGS = {
         "nationality": "UTOPIAN",
         "dob": "000101",
         "expiry": "300101",
+        "sex": "F",  # doc_face_photo (PERSON_A) is a woman
         "doc_face_photo": PERSON_A, "live_face_photo": PERSON_A  # same person -> MATCH
     },
     "mrz_tampering": {
@@ -54,6 +55,7 @@ SCENARIO_CONFIGS = {
         "nationality": "UTOPIAN",
         "dob": "950512",
         "expiry": "281115",
+        "sex": "F",  # doc_face_photo (PERSON_A) is a woman
         "doc_face_photo": PERSON_A, "live_face_photo": PERSON_A  # same person -> MATCH
     },
     "photo_replacement": {
@@ -69,6 +71,7 @@ SCENARIO_CONFIGS = {
         "expiry": "290814",
         # Document photo is Person A; the live subject is Person B -- simulates
         # someone presenting a passport with someone else's photo on it.
+        "sex": "F",  # doc_face_photo (PERSON_A) is a woman -- live_face_photo (PERSON_B) is a different person entirely, by design
         "doc_face_photo": PERSON_A, "live_face_photo": PERSON_B
     },
     "expired": {
@@ -82,6 +85,7 @@ SCENARIO_CONFIGS = {
         "nationality": "UTOPIAN",
         "dob": "921010",
         "expiry": "220101", # Expired in 2022
+        "sex": "F",  # doc_face_photo (PERSON_A) is a woman
         "doc_face_photo": PERSON_A, "live_face_photo": PERSON_A  # same person -> MATCH
     },
     "multiple_anomalies": {
@@ -95,6 +99,7 @@ SCENARIO_CONFIGS = {
         "nationality": "ATLANTIAN",
         "dob": "850704",
         "expiry": "270420",
+        "sex": "F",  # doc_face_photo (PERSON_A) is a woman
         "doc_face_photo": PERSON_A, "live_face_photo": PERSON_B  # mismatch, like photo_replacement
     },
     "watchlist_evasion": {
@@ -114,6 +119,7 @@ SCENARIO_CONFIGS = {
         # "VIKTOR KOROL" / "P8892144") still gets caught. An exact-match-only
         # watchlist check -- what this system had before tonight -- would
         # have missed both and cleared this traveler as LOW risk.
+        "sex": "F",  # doc_face_photo (PERSON_A) is a woman
         "doc_face_photo": PERSON_A, "live_face_photo": PERSON_A
     },
     "pan_card": {
@@ -207,6 +213,7 @@ SCENARIO_CONFIGS = {
         # the SAME real underlying person. Everything about THIS document
         # is individually clean (valid MRZ, no tamper, a genuine face match
         # on its own document) -- only the cross-case gallery lookup catches it.
+        "sex": "F",  # doc_face_photo (PERSON_A) is a woman
         "doc_face_photo": PERSON_A, "live_face_photo": PERSON_A
     }
 }
@@ -226,6 +233,7 @@ _DUPLICATE_IDENTITY_PRIOR_CONFIG = {
     "nationality": "UTOPIAN",
     "dob": "890210",
     "expiry": "300101",
+    "sex": "F",  # doc_face_photo (PERSON_A) is a woman
     "doc_face_photo": PERSON_A, "live_face_photo": PERSON_A
 }
 
@@ -264,7 +272,11 @@ DOCUMENT_TYPE_LABELS = {
 }
 
 @router.post("/scenario")
-def run_demo_scenario(scenario_key: str = Body(..., embed=True), db: Session = Depends(get_db)):
+def run_demo_scenario(
+    scenario_key: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_officer: Officer = Depends(get_current_officer),
+):
     """
     Executes an end-to-end demonstration scenario with 1-click execution.
     Generates appropriate synthetic document, runs all AI modules, computes risk,
@@ -286,13 +298,13 @@ def run_demo_scenario(scenario_key: str = Body(..., embed=True), db: Session = D
         # prior run of this very scenario. Scoping the gallery check to only
         # this scenario pair keeps that stock-photo reuse from being
         # mistaken for a real duplicate signal.
-        _execute_scenario(_DUPLICATE_IDENTITY_PRIOR_CONFIG, db, check_duplicate_identity=True)
-        return _execute_scenario(SCENARIO_CONFIGS[key], db, check_duplicate_identity=True)
+        _execute_scenario(_DUPLICATE_IDENTITY_PRIOR_CONFIG, db, actor=current_officer.badge_id, check_duplicate_identity=True)
+        return _execute_scenario(SCENARIO_CONFIGS[key], db, actor=current_officer.badge_id, check_duplicate_identity=True)
 
-    return _execute_scenario(SCENARIO_CONFIGS[key], db)
+    return _execute_scenario(SCENARIO_CONFIGS[key], db, actor=current_officer.badge_id)
 
 
-def _execute_scenario(cfg: Dict[str, Any], db: Session, check_duplicate_identity: bool = False) -> Dict[str, Any]:
+def _execute_scenario(cfg: Dict[str, Any], db: Session, actor: str = "OFFICER-DEMO-01", check_duplicate_identity: bool = False) -> Dict[str, Any]:
     case_uid = str(uuid.uuid4())
 
     # Specimen filenames are keyed on case_uid (a full UUID4, already
@@ -382,6 +394,12 @@ def _execute_scenario(cfg: Dict[str, Any], db: Session, check_duplicate_identity
             nationality=cfg["nationality"],
             dob_yymmdd=cfg["dob"],
             expiry_yymmdd=cfg["expiry"],
+            # Every scenario's doc_face_photo is PERSON_A (a woman) -- "sex"
+            # used to default to generate_document's own "M" regardless,
+            # printing SEX/SEXE: M and encoding "M" into the MRZ next to a
+            # photo of a woman. Each scenario below now states the sex that
+            # actually matches its own doc_face_photo explicitly.
+            sex=cfg.get("sex", "F"),
             face_photo_path=cfg["doc_face_photo"]
         )
 
@@ -422,7 +440,7 @@ def _execute_scenario(cfg: Dict[str, Any], db: Session, check_duplicate_identity
             if attempt == MAX_CASE_NUMBER_ATTEMPTS - 1:
                 raise
 
-    AuditService.log(db, "DOCUMENT_UPLOADED", case_uid, metadata={"scenario": cfg["title"], "specimen": doc_filename})
+    AuditService.log(db, "DOCUMENT_UPLOADED", case_uid, actor=actor, metadata={"scenario": cfg["title"], "specimen": doc_filename})
 
     try:
         # Real wall-clock timing per step -- this used to be a hardcoded
@@ -640,7 +658,8 @@ def generate_specimen_doc(
     surname: str = Body("KAUL", embed=True),
     given_names: str = Body("ARIHANT", embed=True),
     doc_number: str = Body("X1234567", embed=True),
-    country_name: str = Body("REPUBLIC OF UTOPIA", embed=True)
+    country_name: str = Body("REPUBLIC OF UTOPIA", embed=True),
+    _officer: Officer = Depends(get_current_officer),
 ):
     """Utility to generate a download-ready synthetic document."""
     fname = f"specimen_{uuid.uuid4().hex[:6]}.jpg"
@@ -682,7 +701,7 @@ def generate_specimen_doc(
 
 
 @router.post("/change-detection")
-def run_change_detection_demo(db: Session = Depends(get_db)):
+def run_change_detection_demo(db: Session = Depends(get_db), _officer: Officer = Depends(get_current_officer)):
     """
     Same-Identity Change Detection demo: generates TWO synthetic specimens
     for one claimed identity -- "Version 1" (the original, genuine

@@ -21,18 +21,20 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str = "bordermesh-sih2026-demo-secret-key-change-in-production"
 
-    # Minimal API-key gate (X-API-Key header) required for the two most
-    # sensitive, irreversible actions: permanent case deletion and the
-    # biometric purge protocol. This is NOT a full auth/session system --
-    # there is no per-user identity behind it, and since the frontend has to
-    # embed this key to call those two endpoints, it's a shared secret
-    # visible in the frontend bundle, not a real access-control boundary
-    # against a determined attacker. What it does close: neither endpoint
-    # can currently be triggered by a bare, credential-free request (e.g. a
-    # stray script, a scanner, an unauthenticated curl) -- which is the gap
-    # this was added to close before SIH judging. Revisit with real
-    # per-officer auth before any non-demo deployment.
-    OFFICER_API_KEY: str = "bordermesh-sih2026-officer-key-change-in-production"
+    # Real per-officer authentication (see app.api.deps.get_current_officer
+    # and app.api.routes.auth) -- replaced the old single shared
+    # OFFICER_API_KEY, which had no per-user identity behind it and, since
+    # the frontend had to embed it, was a secret visible in the shipped
+    # bundle rather than a real access boundary. JWTs are signed with
+    # SECRET_KEY above (HS256) and expire after ACCESS_TOKEN_EXPIRE_MINUTES.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 720  # 12 hours, one officer shift
+
+    # The one demo officer account auto-seeded on first boot (see main.py's
+    # lifespan) when the `officers` table is empty -- badge_id
+    # "OFFICER-DEMO-01", this password. Same "real default so the app works
+    # out of the box" tradeoff as every other value on this page; see
+    # default_secrets_still_in_use below for the enforcement half.
+    DEFAULT_OFFICER_PASSWORD: str = "bordermesh-sih2026-demo-password-change-in-production"
     # No wildcard here: FastAPI/Starlette combines allow_credentials=True with
     # a "*" entry by reflecting whatever Origin header the request actually
     # sent, rather than a literal "*" -- which makes this list into a no-op
@@ -138,7 +140,7 @@ os.makedirs(os.path.join(settings.UPLOAD_DIR, "crops"), exist_ok=True)
 # working even if a future edit changes a default -- it should start
 # failing loudly then, not silently stop checking anything.
 _DEFAULT_SECRET_KEY = "bordermesh-sih2026-demo-secret-key-change-in-production"
-_DEFAULT_OFFICER_API_KEY = "bordermesh-sih2026-officer-key-change-in-production"
+_DEFAULT_OFFICER_PASSWORD = "bordermesh-sih2026-demo-password-change-in-production"
 _DEFAULT_BIOMETRIC_ENCRYPTION_KEY = "GIdlRJ4jkqQin6vgx8uDRtGQ2EXnGhbd_jIXGEjS848="
 
 
@@ -153,8 +155,8 @@ def default_secrets_still_in_use() -> list[str]:
     offenders = []
     if settings.SECRET_KEY == _DEFAULT_SECRET_KEY:
         offenders.append("SECRET_KEY")
-    if settings.OFFICER_API_KEY == _DEFAULT_OFFICER_API_KEY:
-        offenders.append("OFFICER_API_KEY")
+    if settings.DEFAULT_OFFICER_PASSWORD == _DEFAULT_OFFICER_PASSWORD:
+        offenders.append("DEFAULT_OFFICER_PASSWORD")
     if settings.BIOMETRIC_ENCRYPTION_KEY == _DEFAULT_BIOMETRIC_ENCRYPTION_KEY:
         offenders.append("BIOMETRIC_ENCRYPTION_KEY")
     return offenders

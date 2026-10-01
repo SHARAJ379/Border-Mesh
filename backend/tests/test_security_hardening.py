@@ -62,16 +62,16 @@ def test_validate_image_upload_still_enforces_size_limit():
 
 def test_default_secrets_still_in_use_flags_the_checked_in_demo_values(monkeypatch):
     monkeypatch.setattr(config_module.settings, "SECRET_KEY", config_module._DEFAULT_SECRET_KEY)
-    monkeypatch.setattr(config_module.settings, "OFFICER_API_KEY", config_module._DEFAULT_OFFICER_API_KEY)
+    monkeypatch.setattr(config_module.settings, "DEFAULT_OFFICER_PASSWORD", config_module._DEFAULT_OFFICER_PASSWORD)
     monkeypatch.setattr(config_module.settings, "BIOMETRIC_ENCRYPTION_KEY", config_module._DEFAULT_BIOMETRIC_ENCRYPTION_KEY)
 
     offenders = config_module.default_secrets_still_in_use()
-    assert set(offenders) == {"SECRET_KEY", "OFFICER_API_KEY", "BIOMETRIC_ENCRYPTION_KEY"}
+    assert set(offenders) == {"SECRET_KEY", "DEFAULT_OFFICER_PASSWORD", "BIOMETRIC_ENCRYPTION_KEY"}
 
 
 def test_default_secrets_still_in_use_is_clean_once_all_are_overridden(monkeypatch):
     monkeypatch.setattr(config_module.settings, "SECRET_KEY", "a-real-override-value")
-    monkeypatch.setattr(config_module.settings, "OFFICER_API_KEY", "another-real-override-value")
+    monkeypatch.setattr(config_module.settings, "DEFAULT_OFFICER_PASSWORD", "another-real-override-value")
     monkeypatch.setattr(config_module.settings, "BIOMETRIC_ENCRYPTION_KEY", "yet-another-real-override-value")
 
     assert config_module.default_secrets_still_in_use() == []

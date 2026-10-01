@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 
-from app.api.deps import get_db
-from app.models import Case, DocumentAnalysis, RiskCheck, AuditLog
+from app.api.deps import get_db, get_current_officer
+from app.models import Case, DocumentAnalysis, RiskCheck, AuditLog, Officer
 from app.schemas import DashboardStatsOut, CaseOut
 from app.services.policy_service import get_policy
 
@@ -62,7 +62,7 @@ def _compute_latency_breakdown(db: Session):
     return breakdown
 
 @router.get("/stats", response_model=DashboardStatsOut)
-def get_dashboard_stats(db: Session = Depends(get_db)):
+def get_dashboard_stats(db: Session = Depends(get_db), _officer: Officer = Depends(get_current_officer)):
     """Computes real-time metrics, risk distributions, and operational queue stats."""
     total_screened = db.query(Case).count()
     

@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import App from './App.tsx'
+import { AppGate } from './AppGate.tsx'
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage'
 import { TermsPage } from './pages/TermsPage'
 import { WelcomePage } from './pages/WelcomePage'
@@ -26,7 +26,9 @@ function resolvePage() {
     case '/welcome':
       return <WelcomePage />;
     default:
-      return <App />;
+      // The dashboard itself now requires real officer login -- see
+      // AppGate.tsx, which renders LoginPage until a valid session exists.
+      return <AppGate />;
   }
 }
 

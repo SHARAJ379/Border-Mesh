@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { User } from 'lucide-react';
+import { User, LogOut } from 'lucide-react';
 import { QuickDemoBar } from './QuickDemoBar';
+import { api } from '../services/api';
+import { getOfficer } from '../lib/auth';
 
 interface NavbarProps {
   currentTab: string;
@@ -55,8 +57,16 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onScenarioLoaded }) 
           <span className="hidden md:inline figure">{timeStr}</span>
           <div className="flex items-center gap-1.5 md:pl-3 md:border-l md:border-hairline">
             <User className="w-3.5 h-3.5 text-muted" strokeWidth={1.75} />
-            <span>Officer-Demo-01</span>
+            <span>{getOfficer()?.badge_id ?? 'Unknown officer'}</span>
           </div>
+          <button
+            type="button"
+            onClick={() => api.logout()}
+            title="Sign out"
+            className="flex items-center gap-1 pl-2 hover:text-accent transition-colors cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" strokeWidth={1.75} />
+          </button>
         </div>
       </div>
     </header>

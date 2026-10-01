@@ -11,6 +11,7 @@ import {
   ChangeDetectionResult,
   DpdpComplianceStatus
 } from '../types';
+import { authHeader, clearSession, setSession, getOfficer, Officer } from '../lib/auth';
 
 const API_BASE = '/api';
 
@@ -21,15 +22,28 @@ const API_BASE = '/api';
 // bounded so a stuck request surfaces as a clear, catchable error instead.
 const SCREENING_STEP_TIMEOUT_MS = 20000;
 
-async function fetchWithTimeout(
+// Every API call now requires a real logged-in officer (see
+// backend/app/api/deps.py's get_current_officer) -- this wraps fetch to
+// attach the session's Authorization header automatically, and to clear
+// the stored session (and let the app shell fall back to the login screen,
+// via lib/auth.ts's SESSION_CHANGED_EVENT) on a 401, instead of every
+// individual call site having to handle that itself. Replaces the old
+// `officerFetch`, which only wrapped the 4 most sensitive endpoints with a
+// single shared password prompted via window.prompt.
+async function authFetch(
   url: string,
   options: RequestInit = {},
   timeoutMs: number = SCREENING_STEP_TIMEOUT_MS
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res: Response;
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    res = await fetch(url, {
+      ...options,
+      headers: { ...options.headers, ...authHeader() },
+      signal: controller.signal
+    });
   } catch (err: any) {
     if (err.name === 'AbortError') {
       throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s -- the server may be unavailable or unable to process this file.`);
@@ -38,55 +52,42 @@ async function fetchWithTimeout(
   } finally {
     clearTimeout(timer);
   }
-}
-
-// Officer-gated actions (case deletion, biometric purge, policy updates,
-// blockchain anchoring -- see backend/app/api/deps.py's require_officer_auth)
-// require an X-API-Key header. This USED TO be a literal key value baked
-// into this file as a hardcoded fallback constant -- meaning the actual
-// secret was always present in plaintext in the built JS bundle, readable
-// by anyone with browser devtools, regardless of whether a build-time
-// override was configured. There is no key-shaped literal anywhere in this
-// module now: the officer enters the password once per browser tab session
-// (sessionStorage, cleared when the tab closes), and it's only ever held in
-// memory/sessionStorage on the client, never in source or the shipped bundle.
-const OFFICER_KEY_STORAGE_KEY = 'bordermesh_officer_key';
-
-function getStoredOfficerKey(): string | null {
-  return sessionStorage.getItem(OFFICER_KEY_STORAGE_KEY);
-}
-
-function promptForOfficerKey(): string | null {
-  const key = window.prompt('Officer authorization required.\n\nEnter the officer password to continue:');
-  if (key) sessionStorage.setItem(OFFICER_KEY_STORAGE_KEY, key);
-  return key;
-}
-
-// Wraps fetch for the 4 officer-gated endpoints: attaches the session's
-// stored key (prompting once if none is stored yet), and on a 401 (missing,
-// wrong, or stale key) clears whatever was stored and prompts exactly once
-// more before giving up -- covers both "never entered a key this session"
-// and "entered a wrong/outdated one" without looping indefinitely.
-async function officerFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  let key = getStoredOfficerKey() ?? promptForOfficerKey();
-  if (!key) throw new Error('Officer authorization is required for this action.');
-
-  const withKey = (k: string): RequestInit => ({
-    ...options,
-    headers: { ...options.headers, 'X-API-Key': k }
-  });
-
-  let res = await fetch(url, withKey(key));
   if (res.status === 401) {
-    sessionStorage.removeItem(OFFICER_KEY_STORAGE_KEY);
-    key = promptForOfficerKey();
-    if (!key) throw new Error('Officer authorization is required for this action.');
-    res = await fetch(url, withKey(key));
+    clearSession();
   }
   return res;
 }
 
 export const api = {
+  async login(badgeId: string, password: string): Promise<{ officer: Officer }> {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ badge_id: badgeId, password })
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.detail || 'Invalid badge ID or password.');
+    }
+    const data = await res.json();
+    setSession(data.access_token, data.officer);
+    return { officer: data.officer };
+  },
+
+  logout(): void {
+    clearSession();
+  },
+
+  /** Restores a session on page reload: confirms the stored token is still
+   * valid and refreshes the cached officer display name. */
+  async restoreSession(): Promise<Officer | null> {
+    const res = await authFetch(`${API_BASE}/auth/me`);
+    if (!res.ok) return null;
+    return res.json();
+  },
+
+  getCachedOfficer: getOfficer,
+
   async getHealth() {
     const res = await fetch(`${API_BASE}/health`);
     if (!res.ok) throw new Error('Health check failed');
@@ -94,7 +95,7 @@ export const api = {
   },
 
   async getDashboardStats(): Promise<DashboardStats> {
-    const res = await fetch(`${API_BASE}/dashboard/stats`);
+    const res = await authFetch(`${API_BASE}/dashboard/stats`);
     if (!res.ok) throw new Error('Failed to fetch dashboard statistics');
     return res.json();
   },
@@ -113,25 +114,25 @@ export const api = {
     if (params?.limit) query.append('limit', params.limit.toString());
     if (params?.offset) query.append('offset', params.offset.toString());
 
-    const res = await fetch(`${API_BASE}/cases?${query.toString()}`);
+    const res = await authFetch(`${API_BASE}/cases?${query.toString()}`);
     if (!res.ok) throw new Error('Failed to fetch cases list');
     return res.json();
   },
 
   async getCaseDetail(caseId: string): Promise<CaseDetail> {
-    const res = await fetch(`${API_BASE}/cases/${caseId}`);
+    const res = await authFetch(`${API_BASE}/cases/${caseId}`);
     if (!res.ok) throw new Error(`Failed to fetch case ${caseId}`);
     return res.json();
   },
 
   async getCaseChecks(caseId: string): Promise<RiskCheck[]> {
-    const res = await fetch(`${API_BASE}/cases/${caseId}/checks`);
+    const res = await authFetch(`${API_BASE}/cases/${caseId}/checks`);
     if (!res.ok) throw new Error('Failed to fetch risk checks');
     return res.json();
   },
 
   async getCaseAuditTrail(caseId: string): Promise<AuditLog[]> {
-    const res = await fetch(`${API_BASE}/cases/${caseId}/audit`);
+    const res = await authFetch(`${API_BASE}/cases/${caseId}/audit`);
     if (!res.ok) throw new Error('Failed to fetch case audit trail');
     return res.json();
   },
@@ -141,17 +142,17 @@ export const api = {
     decision: OfficerDecision,
     notes?: string
   ): Promise<CaseItem> {
-    const res = await fetch(`${API_BASE}/cases/${caseId}/decision`, {
+    const res = await authFetch(`${API_BASE}/cases/${caseId}/decision`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ decision, notes, officer_id: 'OFFICER-DEMO-01' })
+      body: JSON.stringify({ decision, notes })
     });
     if (!res.ok) throw new Error('Failed to record officer decision');
     return res.json();
   },
 
   async deleteCase(caseId: string): Promise<{ message: string }> {
-    const res = await officerFetch(`${API_BASE}/cases/${caseId}`, { method: 'DELETE' });
+    const res = await authFetch(`${API_BASE}/cases/${caseId}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Failed to delete case data');
     return res.json();
   },
@@ -163,7 +164,7 @@ export const api = {
     purged_files_count: number;
     audit_hash: string;
   }> {
-    const res = await officerFetch(`${API_BASE}/cases/${caseId}/purge-biometrics`, { method: 'POST' });
+    const res = await authFetch(`${API_BASE}/cases/${caseId}/purge-biometrics`, { method: 'POST' });
     if (!res.ok) throw new Error('Failed to purge case biometrics');
     return res.json();
   },
@@ -184,37 +185,40 @@ export const api = {
     if (params?.limit) query.append('limit', params.limit.toString());
     if (params?.offset) query.append('offset', params.offset.toString());
 
-    const res = await fetch(`${API_BASE}/audit?${query.toString()}`);
+    const res = await authFetch(`${API_BASE}/audit?${query.toString()}`);
     if (!res.ok) throw new Error('Failed to fetch audit ledger logs');
     return res.json();
   },
 
   async verifyAuditChain(): Promise<ChainVerificationResult> {
-    const res = await fetch(`${API_BASE}/audit/verify`);
+    const res = await authFetch(`${API_BASE}/audit/verify`);
     if (!res.ok) throw new Error('Audit ledger chain verification failed');
     return res.json();
   },
 
   async getDpdpComplianceStatus(): Promise<DpdpComplianceStatus> {
-    const res = await fetch(`${API_BASE}/compliance/dpdp-status`);
+    const res = await authFetch(`${API_BASE}/compliance/dpdp-status`);
     if (!res.ok) throw new Error('Failed to load DPDP compliance status');
     return res.json();
   },
 
   async verifyCaseChain(caseId: string): Promise<ChainVerificationResult> {
-    const res = await fetch(`${API_BASE}/audit/cases/${caseId}/verify`);
+    const res = await authFetch(`${API_BASE}/audit/cases/${caseId}/verify`);
     if (!res.ok) throw new Error('Case chain verification failed');
     return res.json();
   },
 
   async listBlockchainAnchors(): Promise<BlockchainAnchor[]> {
+    // Deliberately plain fetch, not authFetch: this one stays public
+    // without login (see backend/app/api/routes/audit.py) -- everything it
+    // returns is already public on-chain once anchored.
     const res = await fetch(`${API_BASE}/audit/anchors`);
     if (!res.ok) throw new Error('Failed to fetch blockchain anchor history');
     return res.json();
   },
 
   async anchorAuditChain(): Promise<BlockchainAnchor> {
-    const res = await officerFetch(`${API_BASE}/audit/anchor`, { method: 'POST' });
+    const res = await authFetch(`${API_BASE}/audit/anchor`, { method: 'POST' });
     if (!res.ok) {
       const body = await res.json().catch(() => null);
       throw new Error(body?.detail || 'Failed to anchor audit chain to testnet');
@@ -239,7 +243,7 @@ export const api = {
     formData.append('document_type', documentType);
     formData.append('country', country);
 
-    const res = await fetchWithTimeout(`${API_BASE}/screening/upload`, {
+    const res = await authFetch(`${API_BASE}/screening/upload`, {
       method: 'POST',
       body: formData
     });
@@ -251,19 +255,19 @@ export const api = {
   },
 
   async runStepOCR(caseId: string) {
-    const res = await fetchWithTimeout(`${API_BASE}/screening/${caseId}/ocr`, { method: 'POST' });
+    const res = await authFetch(`${API_BASE}/screening/${caseId}/ocr`, { method: 'POST' });
     if (!res.ok) throw new Error('OCR extraction failed');
     return res.json();
   },
 
   async runStepValidate(caseId: string) {
-    const res = await fetchWithTimeout(`${API_BASE}/screening/${caseId}/validate`, { method: 'POST' });
+    const res = await authFetch(`${API_BASE}/screening/${caseId}/validate`, { method: 'POST' });
     if (!res.ok) throw new Error('MRZ and rules validation failed');
     return res.json();
   },
 
   async runStepTamper(caseId: string) {
-    const res = await fetchWithTimeout(`${API_BASE}/screening/${caseId}/tamper`, { method: 'POST' });
+    const res = await authFetch(`${API_BASE}/screening/${caseId}/tamper`, { method: 'POST' });
     if (!res.ok) throw new Error('Tamper forensics failed');
     return res.json();
   },
@@ -273,7 +277,7 @@ export const api = {
     if (liveFaceFile) {
       formData.append('file', liveFaceFile);
     }
-    const res = await fetchWithTimeout(`${API_BASE}/screening/${caseId}/face`, {
+    const res = await authFetch(`${API_BASE}/screening/${caseId}/face`, {
       method: 'POST',
       body: liveFaceFile ? formData : undefined
     });
@@ -282,14 +286,14 @@ export const api = {
   },
 
   async runStepRisk(caseId: string) {
-    const res = await fetchWithTimeout(`${API_BASE}/screening/${caseId}/risk`, { method: 'POST' });
+    const res = await authFetch(`${API_BASE}/screening/${caseId}/risk`, { method: 'POST' });
     if (!res.ok) throw new Error('Risk score aggregation failed');
     return res.json();
   },
 
   // --- Demo Scenario Automation ---
   async runDemoScenario(scenarioKey: string) {
-    const res = await fetch(`${API_BASE}/demo/scenario`, {
+    const res = await authFetch(`${API_BASE}/demo/scenario`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scenario_key: scenarioKey })
@@ -305,7 +309,7 @@ export const api = {
     doc_number?: string;
     country_name?: string;
   }) {
-    const res = await fetchWithTimeout(`${API_BASE}/demo/generate-doc`, {
+    const res = await authFetch(`${API_BASE}/demo/generate-doc`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params)
@@ -318,7 +322,7 @@ export const api = {
     // Generates two specimens and runs OCR/MRZ/face comparison on both --
     // slower than the other demo endpoints, so this gets its own longer
     // timeout rather than the shared 20s SCREENING_STEP_TIMEOUT_MS.
-    const res = await fetchWithTimeout(
+    const res = await authFetch(
       `${API_BASE}/demo/change-detection`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' } },
       40000
@@ -331,13 +335,13 @@ export const api = {
   },
 
   async getPolicy(): Promise<PolicySettings> {
-    const res = await fetch(`${API_BASE}/settings/policy`);
+    const res = await authFetch(`${API_BASE}/settings/policy`);
     if (!res.ok) throw new Error('Failed to load policy settings');
     return res.json();
   },
 
   async updatePolicy(policy: PolicySettings): Promise<PolicySettings> {
-    const res = await officerFetch(`${API_BASE}/settings/policy`, {
+    const res = await authFetch(`${API_BASE}/settings/policy`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(policy)
