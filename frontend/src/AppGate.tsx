@@ -42,7 +42,15 @@ export const AppGate: React.FC = () => {
   }
 
   if (!officer) {
-    return <LoginPage onLoggedIn={() => setOfficer(getOfficer())} />;
+    // After a successful login, land on the public /welcome page first
+    // (its own "Open Dashboard" links point back at "/") rather than
+    // dropping straight into the operations dashboard -- a full browser
+    // navigation, not client-side state, since main.tsx resolves /welcome
+    // vs. the dashboard by pathname at load (see its own comment on why
+    // there's no router here). The session is already stored at this
+    // point, so landing back on "/" afterward skips the login screen
+    // entirely and goes straight to the dashboard.
+    return <LoginPage onLoggedIn={() => { window.location.href = '/welcome'; }} />;
   }
 
   return <App />;
