@@ -162,17 +162,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             {barData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={barData} layout="vertical" margin={{ left: 8, right: 24, top: 4, bottom: 4 }}>
-                  <XAxis type="number" stroke="#767E8C" fontSize={10} tickLine={false} axisLine={{ stroke: '#141C2B29' }} tick={{ fill: '#767E8C' }} />
-                  <YAxis type="category" dataKey="name" stroke="#767E8C" fontSize={10} width={160} tickLine={false} axisLine={false} tick={{ fill: '#4A5364' }} />
+                  <XAxis type="number" stroke="var(--color-muted)" fontSize={10} tickLine={false} axisLine={{ stroke: 'var(--color-hairline)' }} tick={{ fill: 'var(--color-muted)' }} />
+                  <YAxis type="category" dataKey="name" stroke="var(--color-muted)" fontSize={10} width={160} tickLine={false} axisLine={false} tick={{ fill: 'var(--color-ink-soft)' }} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#EFE9DD', border: '1px solid #141C2B29', borderRadius: 0, fontSize: '11px', padding: '8px 12px', fontFamily: 'Courier Prime, monospace' }}
-                    itemStyle={{ color: '#141C2B' }}
+                    contentStyle={{ backgroundColor: 'var(--color-paper-dim)', border: '1px solid var(--color-hairline)', borderRadius: 0, fontSize: '11px', padding: '8px 12px', fontFamily: 'Courier Prime, monospace' }}
+                    itemStyle={{ color: 'var(--color-ink)' }}
                     labelFormatter={(_label, payload) => (payload && payload[0] ? (payload[0].payload as any).fullLabel : _label)}
                     wrapperStyle={{ whiteSpace: 'normal' }}
                     formatter={(value: any) => String(value ?? '0')}
-                    cursor={{ fill: '#141C2B0A' }}
+                    cursor={{ fill: 'var(--color-hairline)' }}
                   />
-                  <Bar dataKey="count" fill="#2C4A8F" radius={[0, 0, 0, 0]} maxBarSize={14} />
+                  <Bar dataKey="count" fill="var(--color-accent)" radius={[0, 0, 0, 0]} maxBarSize={14} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (

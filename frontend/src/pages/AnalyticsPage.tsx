@@ -101,11 +101,11 @@ export const AnalyticsPage: React.FC = () => {
     },
   ];
 
-  const chartAxisStyle = { stroke: '#767E8C', fontSize: 10 };
+  const chartAxisStyle = { stroke: 'var(--color-muted)', fontSize: 10 };
   const tooltipStyle = {
-    contentStyle: { backgroundColor: '#EFE9DD', border: '1px solid #141C2B29', borderRadius: 0, fontSize: '11px', padding: '8px 12px', fontFamily: 'Courier Prime, monospace' },
-    itemStyle: { color: '#141C2B' },
-    cursor: { fill: '#141C2B0A' },
+    contentStyle: { backgroundColor: 'var(--color-paper-dim)', border: '1px solid var(--color-hairline)', borderRadius: 0, fontSize: '11px', padding: '8px 12px', fontFamily: 'Courier Prime, monospace' },
+    itemStyle: { color: 'var(--color-ink)' },
+    cursor: { fill: 'var(--color-hairline)' },
   };
 
   return (
@@ -144,11 +144,11 @@ export const AnalyticsPage: React.FC = () => {
           <div className="h-64 mt-4">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={latencyBreakdown} layout="vertical" margin={{ right: 36 }}>
-                <XAxis type="number" tickLine={false} axisLine={{ stroke: '#141C2B29' }} tick={{ fill: chartAxisStyle.stroke, fontSize: chartAxisStyle.fontSize }} />
-                <YAxis type="category" dataKey="module" width={140} tickLine={false} axisLine={false} tick={{ fill: '#4A5364', fontSize: chartAxisStyle.fontSize }} />
+                <XAxis type="number" tickLine={false} axisLine={{ stroke: 'var(--color-hairline)' }} tick={{ fill: chartAxisStyle.stroke, fontSize: chartAxisStyle.fontSize }} />
+                <YAxis type="category" dataKey="module" width={140} tickLine={false} axisLine={false} tick={{ fill: 'var(--color-ink-soft)', fontSize: chartAxisStyle.fontSize }} />
                 <Tooltip {...tooltipStyle} formatter={(value: any) => `${value}ms`} />
-                <Bar dataKey="time" fill="#2C4A8F" radius={[0, 0, 0, 0]} maxBarSize={10}>
-                  <LabelList dataKey="time" position="right" formatter={(value?: React.ReactNode) => `${value}ms`} fill="#4A5364" fontSize={10} />
+                <Bar dataKey="time" fill="var(--color-accent)" radius={[0, 0, 0, 0]} maxBarSize={10}>
+                  <LabelList dataKey="time" position="right" formatter={(value?: React.ReactNode) => `${value}ms`} fill="var(--color-ink-soft)" fontSize={10} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -160,10 +160,10 @@ export const AnalyticsPage: React.FC = () => {
           <div className="h-64 mt-4">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={docTypeData} margin={{ left: 8, right: 24, top: 4, bottom: 4 }}>
-                <XAxis dataKey="type" tickLine={false} axisLine={{ stroke: '#141C2B29' }} tick={{ fill: chartAxisStyle.stroke, fontSize: chartAxisStyle.fontSize }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fill: '#4A5364', fontSize: chartAxisStyle.fontSize }} />
+                <XAxis dataKey="type" tickLine={false} axisLine={{ stroke: 'var(--color-hairline)' }} tick={{ fill: chartAxisStyle.stroke, fontSize: chartAxisStyle.fontSize }} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fill: 'var(--color-ink-soft)', fontSize: chartAxisStyle.fontSize }} />
                 <Tooltip {...tooltipStyle} formatter={(value: any) => `${value}`} />
-                <Bar dataKey="count" fill="#2C4A8F" radius={[0, 0, 0, 0]} maxBarSize={28} />
+                <Bar dataKey="count" fill="var(--color-accent)" radius={[0, 0, 0, 0]} maxBarSize={28} />
               </BarChart>
             </ResponsiveContainer>
           </div>

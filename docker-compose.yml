@@ -28,7 +28,7 @@ services:
         condition: service_healthy
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/bordermesh
-      - ENVIRONMENT=production
+      - ENVIRONMENT=development
       - DEMO_MODE=true
       - SECRET_KEY=bordermesh-sih2026-demo-secret-key-change-in-production
       # Symmetric key encrypting biometric artifacts at rest (see

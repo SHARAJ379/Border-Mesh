@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import Lenis from 'lenis';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
@@ -13,8 +13,17 @@ gsap.registerPlugin(ScrollTrigger);
  * scrolls natively) and keeps GSAP ScrollTrigger in sync with it via the
  * scrollerProxy API, so ScrollTrigger-based reveals inside that container
  * fire at the right offsets.
+ *
+ * `resetKey` -- when it changes, scroll position is snapped back to the
+ * top. App.tsx swaps its whole page body under this SAME scroller/Lenis
+ * instance on every sidebar tab change (single-page, tab-state driven, no
+ * router remount -- see App.tsx), so without this the newly-shown page
+ * silently inherits whatever scroll offset the previous page was left at
+ * instead of starting at its own top.
  */
-export function useLenis(scroller: HTMLElement | null) {
+export function useLenis(scroller: HTMLElement | null, resetKey?: unknown) {
+  const lenisRef = useRef<Lenis | null>(null);
+
   useEffect(() => {
     if (!scroller) return;
 
@@ -30,6 +39,7 @@ export function useLenis(scroller: HTMLElement | null) {
       duration: 1.1,
       smoothWheel: true,
     });
+    lenisRef.current = lenis;
 
     ScrollTrigger.scrollerProxy(scroller, {
       scrollTop(value) {
@@ -65,6 +75,19 @@ export function useLenis(scroller: HTMLElement | null) {
       gsap.ticker.remove(raf);
       trigger.kill();
       lenis.destroy();
+      lenisRef.current = null;
     };
   }, [scroller]);
+
+  useEffect(() => {
+    if (resetKey === undefined) return;
+    if (lenisRef.current) {
+      lenisRef.current.scrollTo(0, { immediate: true });
+    } else if (scroller) {
+      // Lenis is skipped entirely under prefers-reduced-motion -- fall back
+      // to a plain native reset so the tab switch still starts at the top.
+      scroller.scrollTop = 0;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey]);
 }

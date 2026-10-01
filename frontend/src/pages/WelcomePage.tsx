@@ -1,6 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowRight, ArrowUpRight, Shield } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Shield, User } from 'lucide-react';
 import { prefersReducedMotion } from '../lib/deviceCapability';
+
+// Smooth-scrolls the nav's #argument/#demonstration/etc. anchor jumps using
+// the browser's own native smooth scroll (each target section already
+// carries `scroll-mt-[58px]` so it lands clear of the fixed nav), not a
+// JS-driven tween: GSAP's ScrollToPlugin was tried here first, but every
+// GSAP tween on this page (this one included) depends on GSAP's own
+// requestAnimationFrame ticker, which browsers throttle hard the moment a
+// tab isn't the visible/focused one -- exactly the situation this was
+// caught in during testing. `scrollIntoView` is driven by the browser's
+// own compositor, not page JS, so it isn't subject to that at all.
+function smoothScrollTo(hash: string) {
+  document.querySelector(hash)?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
+}
 
 /**
  * Public-facing intro page, built to the warm-paper "maker's landing page"
@@ -52,6 +65,33 @@ function useOnceVisible<T extends HTMLElement>(): [React.RefObject<T | null>, bo
     return () => io.disconnect();
   }, []);
   return [ref, visible];
+}
+
+// Entrance reveal for the sections below the fold -- plain CSS opacity/
+// transform driven by IntersectionObserver (the same technique already
+// proven on this page for the demonstration gauge), not GSAP ScrollTrigger:
+// this standalone page mounts every section's trigger simultaneously at
+// scrollY 0 with no Lenis/App shell around it, and ScrollTrigger's
+// scroll-position polling didn't settle cleanly in that context (tweens
+// stuck re-triggering mid-fade instead of completing). IntersectionObserver
+// has no such dependency on continuous scroll-position math -- it just
+// reports "is this on screen," once, and fires reliably either way. Fires
+// once and never un-reveals, per the source spec's own motion-model rule.
+const Reveal: React.FC<{ children: React.ReactNode; className?: string; delay?: number }> = ({ children, className, delay = 0 }) => {
+  const [ref, visible] = useOnceVisible<HTMLDivElement>();
+  return (
+    <div
+      ref={ref}
+      className={className}
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'translateY(0)' : 'translateY(18px)',
+        transition: prefersReducedMotion() ? 'none' : `opacity 600ms ease-out ${delay}s, transform 600ms ease-out ${delay}s`,
+      }}
+    >
+      {children}
+    </div>
+  );
 }
 
 const SpreadWordmark: React.FC<{ shrinkOnScroll?: boolean }> = ({ shrinkOnScroll }) => {
@@ -183,10 +223,24 @@ const TravelingProduct: React.FC = () => {
         <Shield className="w-5 h-5 text-ink" strokeWidth={1.5} />
         <span className="font-sans text-ink-soft" style={{ fontSize: 9, letterSpacing: '0.08em' }}>SPECIMEN</span>
       </div>
-      <div className="space-y-1.5">
-        <div style={{ height: 6, background: 'var(--color-hairline)', width: '80%' }} />
-        <div style={{ height: 6, background: 'var(--color-hairline)', width: '55%' }} />
-        <div style={{ height: 6, background: 'var(--color-hairline)', width: '68%' }} />
+      {/* Fixed vw/px sizing throughout this row, not percentages -- a
+          percentage width nested inside this fixed-position, rotated/
+          scaled card reliably resolves to ~0 in Chromium (reproduced with
+          flex and grid alike; explicit px/vw is unaffected), so every
+          child here is sized the same way the card itself already is. */}
+      <div className="flex items-end" style={{ gap: 10 }}>
+        <div
+          className="flex items-center justify-center shrink-0"
+          style={{ width: 'min(7vw, 60px)', aspectRatio: '3 / 4', border: '1px solid rgba(237, 231, 217, 0.4)' }}
+        >
+          <User className="text-ink-soft" style={{ width: '55%', height: '55%' }} strokeWidth={1.25} />
+        </div>
+        <div className="space-y-1.5">
+          <div style={{ height: 6, background: 'rgba(237, 231, 217, 0.3)', width: 'min(17vw, 130px)' }} />
+          <div style={{ height: 6, background: 'rgba(237, 231, 217, 0.3)', width: 'min(12vw, 95px)' }} />
+          <div style={{ height: 6, background: 'rgba(237, 231, 217, 0.3)', width: 'min(15vw, 112px)' }} />
+          <div style={{ height: 6, background: 'rgba(237, 231, 217, 0.3)', width: 'min(9vw, 70px)' }} />
+        </div>
       </div>
       <span className="font-sans text-muted" style={{ fontSize: 9, letterSpacing: '0.08em' }}>BM-2026-DEMO</span>
     </div>
@@ -248,6 +302,12 @@ const Gauge: React.FC<{ score: number }> = ({ score }) => {
 export const WelcomePage: React.FC = () => {
   const [tier, setTier] = useState<typeof TIERS[number]>(TIERS[0]);
 
+  const handleAnchorClick = (e: React.MouseEvent<HTMLAnchorElement>, hash: string) => {
+    e.preventDefault();
+    smoothScrollTo(hash);
+    history.pushState(null, '', hash);
+  };
+
   return (
     <div className="bg-paper text-ink" style={{ fontFamily: 'var(--font-sans)' }}>
       <TravelingProduct />
@@ -257,10 +317,10 @@ export const WelcomePage: React.FC = () => {
         <div className="max-w-[1180px] mx-auto h-full px-6 flex items-center justify-between">
           <a href="/welcome" className="font-display text-[19px] text-ink">BorderMesh<span className="text-accent">.</span></a>
           <nav className="hidden md:flex items-center gap-7 text-[11px] uppercase tracking-[0.08em]">
-            <a href="#argument" className="hover:text-accent transition-colors">Pipeline</a>
-            <a href="#demonstration" className="hover:text-accent transition-colors">Demonstration</a>
-            <a href="#material" className="hover:text-accent transition-colors">Material</a>
-            <a href="#measurements" className="hover:text-accent transition-colors">Measurements</a>
+            <a href="#argument" onClick={(e) => handleAnchorClick(e, '#argument')} className="hover:text-accent transition-colors">Pipeline</a>
+            <a href="#demonstration" onClick={(e) => handleAnchorClick(e, '#demonstration')} className="hover:text-accent transition-colors">Demonstration</a>
+            <a href="#material" onClick={(e) => handleAnchorClick(e, '#material')} className="hover:text-accent transition-colors">Material</a>
+            <a href="#measurements" onClick={(e) => handleAnchorClick(e, '#measurements')} className="hover:text-accent transition-colors">Measurements</a>
           </nav>
           <a href="/" className="btn-primary text-[11px] px-4 py-2">Open Dashboard</a>
         </div>
@@ -281,7 +341,7 @@ export const WelcomePage: React.FC = () => {
             </p>
             <div className="flex items-center gap-4 mt-8">
               <a href="/" className="btn-primary text-[11px] px-5 py-3">Open Screening Dashboard <ArrowRight className="w-3.5 h-3.5" /></a>
-              <a href="#demonstration" className="btn-secondary text-[11px] px-5 py-3">See it work</a>
+              <a href="#demonstration" onClick={(e) => handleAnchorClick(e, '#demonstration')} className="btn-secondary text-[11px] px-5 py-3">See it work</a>
             </div>
           </div>
 
@@ -306,8 +366,8 @@ export const WelcomePage: React.FC = () => {
       </section>
 
       {/* ---------- ARGUMENT ---------- */}
-      <section id="argument" className="max-w-[1180px] mx-auto px-6 py-24 grid grid-cols-1 md:grid-cols-2 gap-12">
-        <div>
+      <section id="argument" className="scroll-mt-[58px] max-w-[1180px] mx-auto px-6 py-24 grid grid-cols-1 md:grid-cols-2 gap-12">
+        <Reveal>
           <h2 className="font-display text-[30px] leading-tight mb-4">
             One pipeline, not five<br />separate tools.
           </h2>
@@ -317,95 +377,101 @@ export const WelcomePage: React.FC = () => {
             runs every signal together and returns a risk score built from itemized checks, each
             with its own evidence, weighted as below.
           </p>
-        </div>
-        <div>
+        </Reveal>
+        <Reveal delay={0.12}>
           {FACTS.weights.map((w) => (
             <RuleRow key={w.key} label={w.key} description="Contributes to the composite risk score" value={`${w.pct}%`} />
           ))}
-        </div>
+        </Reveal>
       </section>
 
       {/* ---------- DEMONSTRATION ---------- */}
-      <section id="demonstration" className="max-w-[1180px] mx-auto px-6 py-24">
-        <h2 className="font-display text-[30px] leading-tight mb-8">A score with its reasons attached.</h2>
-        <div className="flex flex-wrap gap-2 mb-8" role="group" aria-label="Risk tier">
-          {TIERS.map((tr) => (
-            <button
-              key={tr.id}
-              aria-pressed={tier.id === tr.id}
-              onClick={() => setTier(tr)}
-              className="tab-flat tab-flat-accent px-3"
-            >
-              {tr.label}
-            </button>
-          ))}
-        </div>
-        <div className="panel p-10 grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+      <section id="demonstration" className="scroll-mt-[58px] max-w-[1180px] mx-auto px-6 py-24">
+        <Reveal>
+          <h2 className="font-display text-[30px] leading-tight mb-8">A score with its reasons attached.</h2>
+          <div className="flex flex-wrap gap-2 mb-8" role="group" aria-label="Risk tier">
+            {TIERS.map((tr) => (
+              <button
+                key={tr.id}
+                aria-pressed={tier.id === tr.id}
+                onClick={() => setTier(tr)}
+                className="tab-flat tab-flat-accent px-3"
+              >
+                {tr.label}
+              </button>
+            ))}
+          </div>
+        </Reveal>
+        <Reveal delay={0.12} className="panel p-10 grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
           <Gauge score={tier.score} />
           <div className="space-y-5">
             <RuleRow label="Recommended action" description="Officer makes the final call" value={tier.recommendation} />
             <RuleRow label="Leading factor" description="Highest-weighted contributor" value={tier.factor} />
             <RuleRow label="Itemized checks" description="Pass/fail evidence behind the score" value={tier.checks} />
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* ---------- MATERIAL ---------- */}
-      <section id="material" className="max-w-[1180px] mx-auto px-6 py-24 grid grid-cols-1 md:grid-cols-2 gap-12">
-        <div>
+      <section id="material" className="scroll-mt-[58px] max-w-[1180px] mx-auto px-6 py-24 grid grid-cols-1 md:grid-cols-2 gap-12">
+        <Reveal>
           <h2 className="font-display text-[30px] leading-tight mb-4">Built from real,<br />verifiable parts.</h2>
           <p className="text-[13px] text-ink-soft max-w-[46ch]">
             Each subsystem is a real, independently-testable implementation, not a mock —
             demonstrating that the pipeline's architecture works end to end, not that it matches
             commercial vendors' breadth of document coverage.
           </p>
-        </div>
-        <div>
+        </Reveal>
+        <Reveal delay={0.12}>
           <RuleRow label="OCR extraction" description="Tesseract 5.5 field extraction" value="Active" />
           <RuleRow label="MRZ parser" description="ICAO 9303 checksum validation" value="Active" />
           <RuleRow label="Tamper AI" description="PyTorch CNN + error-level analysis" value="Active" />
           <RuleRow label="Face verification" description="Cosine similarity embedding net" value="Active" />
           <RuleRow label="Audit anchoring" description="Hash-chained ledger, Ethereum Sepolia testnet" value="Optional" />
           <RuleRow label="Data handling" description="DPDP Act 2023 principles, mapped honestly" value="Aligned" />
-        </div>
+        </Reveal>
       </section>
 
       {/* ---------- MEASUREMENTS ---------- */}
-      <section id="measurements" className="max-w-[820px] mx-auto px-6 py-24">
-        <h2 className="font-display text-[30px] leading-tight mb-8">What's actually measured.</h2>
-        <RuleRow label="Document types" description="Passport, Aadhaar, PAN, Driving Licence, Voter ID, Visa, Permit" value={String(FACTS.documentTypes)} />
-        <RuleRow label="Risk factors" description="Each itemized into pass/fail checks with evidence" value={String(FACTS.riskFactors)} />
-        <RuleRow label="Backend tests" description="Automated pytest suite, verified this session" value={String(FACTS.backendTests)} />
-        <RuleRow label="Tamper recall" description="Real, human-made forgeries caught in testing" value={FACTS.tamperRecall} />
-        <RuleRow label="Tamper missed" description="Real forgeries that slip through undetected" value={FACTS.tamperMissed} />
-        <RuleRow label="Encryption" description="Fernet, AES-128-CBC + HMAC-SHA256, authenticated" value="At rest" />
-        <div className="strip mt-8 py-4 px-1">
-          Full breakdown of what's implemented versus simulated, including the watchlist's
-          fictional data and the single static demo encryption key, in the{' '}
-          <a href="/terms" className="text-accent underline underline-offset-2">Terms &amp; Conditions</a>.
-        </div>
+      <section id="measurements" className="scroll-mt-[58px] max-w-[820px] mx-auto px-6 py-24">
+        <Reveal>
+          <h2 className="font-display text-[30px] leading-tight mb-8">What's actually measured.</h2>
+          <RuleRow label="Document types" description="Passport, Aadhaar, PAN, Driving Licence, Voter ID, Visa, Permit" value={String(FACTS.documentTypes)} />
+          <RuleRow label="Risk factors" description="Each itemized into pass/fail checks with evidence" value={String(FACTS.riskFactors)} />
+          <RuleRow label="Backend tests" description="Automated pytest suite, verified this session" value={String(FACTS.backendTests)} />
+          <RuleRow label="Tamper recall" description="Real, human-made forgeries caught in testing" value={FACTS.tamperRecall} />
+          <RuleRow label="Tamper missed" description="Real forgeries that slip through undetected" value={FACTS.tamperMissed} />
+          <RuleRow label="Encryption" description="Fernet, AES-128-CBC + HMAC-SHA256, authenticated" value="At rest" />
+          <div className="strip mt-8 py-4 px-1">
+            Full breakdown of what's implemented versus simulated, including the watchlist's
+            fictional data and the single static demo encryption key, in the{' '}
+            <a href="/terms" className="text-accent underline underline-offset-2">Terms &amp; Conditions</a>.
+          </div>
+        </Reveal>
       </section>
 
       {/* ---------- CLOSE ---------- */}
       <section className="bg-paper-dim border-t border-hairline">
         <div className="max-w-[1180px] mx-auto px-6 pt-24 pb-6">
-          <h2 className="font-display leading-tight mb-4" style={{ fontSize: 'clamp(28px, 3.6vw, 46px)' }}>
-            Every screening comes<br />with its <em>reasons</em>.
-          </h2>
-          <p className="text-[12px] text-muted max-w-[60ch] mb-10">
-            SIH26188 prototype for the Ministry of Home Affairs — a decision-support demo,
-            not a certified or production system. Not for use in live operational screening.
-          </p>
-          <div className="flex items-center justify-between flex-wrap gap-4 pb-10">
-            <a href="/" className="btn-primary text-[11px] px-5 py-3">Open the Dashboard <ArrowRight className="w-3.5 h-3.5" /></a>
-            <a href="/terms" className="btn-secondary text-[11px] px-5 py-3">Read the Limitations <ArrowUpRight className="w-3.5 h-3.5" /></a>
-          </div>
-          <div className="strip py-4 flex flex-wrap gap-x-6 gap-y-2 text-[11px] uppercase tracking-[0.06em]">
-            <a href="/" className="hover:text-accent">Dashboard</a>
-            <a href="/privacy" className="hover:text-accent">Privacy Policy</a>
-            <a href="/terms" className="hover:text-accent">Terms &amp; Conditions</a>
-            <span className="text-muted normal-case tracking-normal ml-auto">Theme: Blockchain &amp; Cybersecurity</span>
-          </div>
+          <Reveal>
+            <h2 className="font-display leading-tight mb-4" style={{ fontSize: 'clamp(28px, 3.6vw, 46px)' }}>
+              Every screening comes<br />with its <em>reasons</em>.
+            </h2>
+            <p className="text-[12px] text-muted max-w-[60ch] mb-10">
+              SIH26188 prototype for the Ministry of Home Affairs — a decision-support demo,
+              not a certified or production system. Not for use in live operational screening.
+            </p>
+            <div className="flex items-center justify-between flex-wrap gap-4 pb-10">
+              <a href="/" className="btn-primary text-[11px] px-5 py-3">Open the Dashboard <ArrowRight className="w-3.5 h-3.5" /></a>
+              <a href="/terms" className="btn-secondary text-[11px] px-5 py-3">Read the Limitations <ArrowUpRight className="w-3.5 h-3.5" /></a>
+            </div>
+            <div className="strip py-4 flex flex-wrap gap-x-6 gap-y-2 text-[11px] uppercase tracking-[0.06em]">
+              <a href="/" className="hover:text-accent">Dashboard</a>
+              <a href="/privacy" className="hover:text-accent">Privacy Policy</a>
+              <a href="/terms" className="hover:text-accent">Terms &amp; Conditions</a>
+              <span className="text-muted normal-case tracking-normal ml-auto">Theme: Blockchain &amp; Cybersecurity</span>
+            </div>
+          </Reveal>
           <SpreadWordmark />
         </div>
       </section>

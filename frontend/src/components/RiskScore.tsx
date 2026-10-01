@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { RiskLevel } from '../types';
 import { ShieldAlert, ShieldCheck, AlertTriangle, ShieldX, Info } from 'lucide-react';
+import { prefersReducedMotion } from '../lib/deviceCapability';
 
 interface RiskScoreProps {
   score: number;
@@ -35,10 +36,23 @@ export const RiskScore: React.FC<RiskScoreProps> = ({
   // Self-drawing SVG meter, the same technique as the /welcome
   // demonstration panel's gauge -- a real forensic reading here, not a
   // marketing device, so the arc is colored by the signal-ink severity
-  // family instead of the single accent blue.
+  // family instead of the single accent blue. Mounts fully undrawn and
+  // flips to the real offset a tick later so the CSS transition actually
+  // has a "from" value to animate -- setting the final offset directly on
+  // mount gives the browser nothing to transition from, and the arc would
+  // just appear instantly instead of drawing in.
+  const [drawn, setDrawn] = useState(prefersReducedMotion());
+  useEffect(() => {
+    if (prefersReducedMotion()) return;
+    const t = setTimeout(() => setDrawn(true), 60);
+    return () => clearTimeout(t);
+  }, []);
+
   const radius = 52;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (Math.min(100, Math.max(0, score)) / 100) * circumference;
+  const strokeDashoffset = drawn
+    ? circumference - (Math.min(100, Math.max(0, score)) / 100) * circumference
+    : circumference;
 
   const sizeStyles = {
     sm: { svg: 'w-24 h-24', score: 'text-2xl', label: 'text-sm', rec: 'text-xs', pad: 'p-4' },

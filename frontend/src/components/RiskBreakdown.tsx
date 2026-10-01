@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { RiskFactorContribution } from '../types';
 import { Sliders } from 'lucide-react';
 import { SectionHeading } from './SectionHeading';
 import { ScrollReveal } from './ScrollReveal';
+import { prefersReducedMotion } from '../lib/deviceCapability';
 
 interface RiskBreakdownProps {
   breakdown: RiskFactorContribution[];
@@ -10,6 +11,17 @@ interface RiskBreakdownProps {
 }
 
 export const RiskBreakdown: React.FC<RiskBreakdownProps> = ({ breakdown, totalScore }) => {
+  // Mounts every line at 0 width and flips to its real value a tick later,
+  // so the CSS transition has a "from" state to draw in from -- same
+  // reasoning as RiskScore's gauge (setting the final width directly on
+  // mount gives the browser nothing to transition from).
+  const [drawn, setDrawn] = useState(prefersReducedMotion());
+  useEffect(() => {
+    if (prefersReducedMotion()) return;
+    const t = setTimeout(() => setDrawn(true), 60);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
     <ScrollReveal className="border border-hairline p-5 space-y-4">
       <SectionHeading
@@ -55,7 +67,7 @@ export const RiskBreakdown: React.FC<RiskBreakdownProps> = ({ breakdown, totalSc
                 <div className="w-full h-[3px] bg-hairline overflow-hidden">
                   <div
                     className="h-full bg-ink transition-all duration-700"
-                    style={{ width: `${Math.min(100, Math.max(0, item.raw_risk as number))}%` }}
+                    style={{ width: drawn ? `${Math.min(100, Math.max(0, item.raw_risk as number))}%` : '0%' }}
                   ></div>
                 </div>
               )}

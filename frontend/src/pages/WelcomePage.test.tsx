@@ -18,13 +18,21 @@ describe('WelcomePage', () => {
   it('discloses known limitations up front instead of only claiming accuracy', () => {
     render(<WelcomePage />);
     expect(screen.getAllByText(/39\.5%/).length).toBeGreaterThan(0);
-    const termsLinks = screen.getAllByRole('link', { name: /Terms/ });
+    // The Terms link lives inside a ScrollReveal section -- GSAP's autoAlpha
+    // leaves it at visibility:hidden under jsdom's no-op ScrollTrigger,
+    // which excludes it from getByRole('link')'s accessible-name query even
+    // though it's really there. getByText ignores CSS visibility (see the
+    // same pattern in RiskReasons.test.tsx), so find the text node and walk
+    // up to its anchor instead.
+    const termsLinks = screen.getAllByText(/Terms/).map((el) => el.closest('a')).filter(Boolean) as HTMLAnchorElement[];
     expect(termsLinks.some((a) => a.getAttribute('href') === '/terms')).toBe(true);
   });
 
   it('links to the Privacy Policy in the footer', () => {
     render(<WelcomePage />);
-    const privacyLinks = screen.getAllByRole('link', { name: /Privacy Policy/ });
+    // See the note above -- this link is inside the same ScrollReveal-hidden
+    // Close section, so query by text rather than accessible role.
+    const privacyLinks = screen.getAllByText(/Privacy Policy/).map((el) => el.closest('a')).filter(Boolean) as HTMLAnchorElement[];
     expect(privacyLinks.some((a) => a.getAttribute('href') === '/privacy')).toBe(true);
   });
 

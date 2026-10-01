@@ -24,7 +24,10 @@ export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [scrollerNode, setScrollerNode] = useState<HTMLElement | null>(null);
-  useLenis(scrollerNode);
+  // currentTab as the reset key: every sidebar tab switch (and opening a
+  // case, which also changes currentTab to 'detail') should land at the
+  // top of the new page, not wherever the previous page's scroll was left.
+  useLenis(scrollerNode, currentTab);
 
   const handleSelectCase = (caseId: string) => {
     setSelectedCaseId(caseId);

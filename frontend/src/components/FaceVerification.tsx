@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { FaceVerificationResult } from '../types';
 import { ScanFace } from 'lucide-react';
 import { RiskBadge } from './RiskBadge';
 import { SectionHeading } from './SectionHeading';
 import { ScrollReveal } from './ScrollReveal';
+import { prefersReducedMotion } from '../lib/deviceCapability';
 
 interface FaceVerificationProps {
   faceResult?: FaceVerificationResult;
@@ -17,6 +18,16 @@ const EmptyState: React.FC = () => (
 );
 
 export const FaceVerification: React.FC<FaceVerificationProps> = ({ faceResult }) => {
+  // Mounts the similarity line at 0 and flips to its real width a tick
+  // later, so the transition has a "from" state to draw in from -- see
+  // RiskScore/RiskBreakdown for the same technique on this page.
+  const [drawn, setDrawn] = useState(prefersReducedMotion());
+  useEffect(() => {
+    if (prefersReducedMotion()) return;
+    const t = setTimeout(() => setDrawn(true), 60);
+    return () => clearTimeout(t);
+  }, []);
+
   if (!faceResult) {
     return <EmptyState />;
   }
@@ -97,7 +108,7 @@ export const FaceVerification: React.FC<FaceVerificationProps> = ({ faceResult }
         <div className="w-full h-[3px] bg-hairline overflow-hidden">
           <div
             className={`h-full transition-all duration-1000 ${isMatch ? 'bg-signal-low' : 'bg-signal-critical'}`}
-            style={{ width: `${Math.min(100, Math.max(0, simPercent))}%` }}
+            style={{ width: drawn ? `${Math.min(100, Math.max(0, simPercent))}%` : '0%' }}
           ></div>
         </div>
       </div>
