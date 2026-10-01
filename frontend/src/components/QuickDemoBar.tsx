@@ -46,9 +46,14 @@ export const QuickDemoBar: React.FC<QuickDemoBarProps> = ({ onScenarioLoaded }) 
         onChange={(e) => setSelectedScenario(e.target.value)}
         disabled={loading}
         className="bg-transparent text-ink-soft border-0 py-0.5 focus:outline-none disabled:opacity-50 cursor-pointer max-w-xs sm:max-w-sm"
+        style={{ colorScheme: 'dark' }}
       >
+        {/* Explicit bg/text per option -- a native <option>'s popup list
+            doesn't reliably inherit color from its <select> in Chromium,
+            falling back to a near-unreadable system default against this
+            app's dark theme. */}
         {scenarios.map((sc) => (
-          <option key={sc.key} value={sc.key}>
+          <option key={sc.key} value={sc.key} className="bg-paper-dim text-ink">
             {sc.label} — {sc.desc}
           </option>
         ))}

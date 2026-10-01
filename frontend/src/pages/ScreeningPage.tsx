@@ -297,14 +297,21 @@ export const ScreeningPage: React.FC<ScreeningPageProps> = ({ onScreeningComplet
               onChange={(e) => setTamperOption(e.target.value)}
               disabled={generatingSpecimen || isProcessing}
               className="bg-transparent text-ink px-3 py-1.5 text-[11px] focus:outline-none min-w-0 border-r border-hairline cursor-pointer"
+              style={{ colorScheme: 'dark' }}
             >
-              <option value="photo_replaced">Photo replacement</option>
-              <option value="mrz_tampered">MRZ checksum corruption</option>
-              <option value="altered_text">Altered date/text</option>
-              <option value="expired">Expired document</option>
-              <option value="stamp_manipulated">Pasted stamp patch</option>
-              <option value="brightness_manipulated">Brightness hotspot</option>
-              <option value="multiple_anomalies">Multiple anomalies</option>
+              {/* The closed select picks up text-ink via inheritance, but a
+                  native <option>'s own popup list doesn't reliably inherit
+                  color/background from its parent <select> in Chromium --
+                  it falls back to a washed-out system default, nearly
+                  unreadable against this app's dark theme. Each option
+                  needs its own explicit bg/text color, not inheritance. */}
+              <option value="photo_replaced" className="bg-paper-dim text-ink">Photo replacement</option>
+              <option value="mrz_tampered" className="bg-paper-dim text-ink">MRZ checksum corruption</option>
+              <option value="altered_text" className="bg-paper-dim text-ink">Altered date/text</option>
+              <option value="expired" className="bg-paper-dim text-ink">Expired document</option>
+              <option value="stamp_manipulated" className="bg-paper-dim text-ink">Pasted stamp patch</option>
+              <option value="brightness_manipulated" className="bg-paper-dim text-ink">Brightness hotspot</option>
+              <option value="multiple_anomalies" className="bg-paper-dim text-ink">Multiple anomalies</option>
             </select>
 
             <button
@@ -390,11 +397,12 @@ export const ScreeningPage: React.FC<ScreeningPageProps> = ({ onScreeningComplet
                 value={documentType}
                 onChange={(e) => setDocumentType(e.target.value)}
                 className="field w-full cursor-pointer"
+                style={{ colorScheme: 'dark' }}
               >
-                <option value="Passport">Passport (TD3)</option>
-                <option value="National ID">National ID (TD1)</option>
-                <option value="Visa">Travel Visa</option>
-                <option value="Permit">Permit (Residence/Work/Entry/Transit)</option>
+                <option value="Passport" className="bg-paper-dim text-ink">Passport (TD3)</option>
+                <option value="National ID" className="bg-paper-dim text-ink">National ID (TD1)</option>
+                <option value="Visa" className="bg-paper-dim text-ink">Travel Visa</option>
+                <option value="Permit" className="bg-paper-dim text-ink">Permit (Residence/Work/Entry/Transit)</option>
               </select>
             </div>
 
@@ -406,12 +414,13 @@ export const ScreeningPage: React.FC<ScreeningPageProps> = ({ onScreeningComplet
                 value={country}
                 onChange={(e) => setCountry(e.target.value)}
                 className="field w-full cursor-pointer"
+                style={{ colorScheme: 'dark' }}
               >
-                <option value="REPUBLIC OF UTOPIA">Republic of Utopia (UTO)</option>
-                <option value="DEMO STATE">Demo State (DEM)</option>
-                <option value="ATLANTIS FEDERATION">Atlantis Federation (ATL)</option>
-                <option value="INDIA">India (IND)</option>
-                <option value="UNITED KINGDOM">United Kingdom (GBR)</option>
+                <option value="REPUBLIC OF UTOPIA" className="bg-paper-dim text-ink">Republic of Utopia (UTO)</option>
+                <option value="DEMO STATE" className="bg-paper-dim text-ink">Demo State (DEM)</option>
+                <option value="ATLANTIS FEDERATION" className="bg-paper-dim text-ink">Atlantis Federation (ATL)</option>
+                <option value="INDIA" className="bg-paper-dim text-ink">India (IND)</option>
+                <option value="UNITED KINGDOM" className="bg-paper-dim text-ink">United Kingdom (GBR)</option>
               </select>
             </div>
           </div>

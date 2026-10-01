@@ -169,10 +169,15 @@ export const CaseHeader: React.FC<CaseHeaderProps> = ({
               value={decision}
               onChange={(e) => setDecision(e.target.value as OfficerDecision)}
               className="field w-full cursor-pointer"
+              style={{ colorScheme: 'dark' }}
             >
-              <option value="CLEARED">CLEARED (Admit Traveler)</option>
-              <option value="REQUIRES_INSPECTION">REQUIRES FURTHER INSPECTION (Secondary)</option>
-              <option value="ESCALATED">ESCALATED (Supervisor Review)</option>
+              {/* Explicit bg/text per option -- a native <option>'s popup
+                  list doesn't reliably inherit color from its <select> in
+                  Chromium, falling back to a near-unreadable system default
+                  against this app's dark theme. */}
+              <option value="CLEARED" className="bg-paper-dim text-ink">CLEARED (Admit Traveler)</option>
+              <option value="REQUIRES_INSPECTION" className="bg-paper-dim text-ink">REQUIRES FURTHER INSPECTION (Secondary)</option>
+              <option value="ESCALATED" className="bg-paper-dim text-ink">ESCALATED (Supervisor Review)</option>
             </select>
           </div>
 
