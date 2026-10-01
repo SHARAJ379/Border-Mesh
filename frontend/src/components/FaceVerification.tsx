@@ -119,14 +119,29 @@ export const FaceVerification: React.FC<FaceVerificationProps> = ({ faceResult }
         <div className="p-3 text-[11px]">
           <span className="label-eyebrow block">Sharpness</span>
           <span className="font-bold text-ink block mt-1">
-            {quality.laplacian_sharpness ? `${quality.laplacian_sharpness} (Good)` : 'Adequate'}
+            {/* `!= null`, not truthiness -- a genuine 0.0 sharpness reading
+                is falsy and would otherwise be swallowed into the "not
+                measured" branch below. Previously hardcoded "(Good)"
+                regardless of the backend's own is_blurry verdict, so a
+                capture it had just flagged FAIL for motion blur in the Risk
+                Reasons tab still read "(Good)" here. */}
+            {quality.laplacian_sharpness != null
+              ? `${quality.laplacian_sharpness} (${quality.is_blurry ? 'Blurry' : 'Good'})`
+              : 'Not measured'}
           </span>
         </div>
 
         <div className="p-3 text-[11px]">
           <span className="label-eyebrow block">Lighting</span>
           <span className="font-bold text-ink block mt-1">
-            {quality.is_dark ? 'Underexposed' : quality.is_overexposed ? 'Overexposed' : 'Balanced'}
+            {/* Same gap as Sharpness: when face detection itself failed
+                (NO_FACE_DETECTED/MULTIPLE_FACES), quality_checks carries no
+                brightness reading at all -- is_dark/is_overexposed are both
+                undefined, which previously fell through to "Balanced",
+                falsely implying a measurement that never happened. */}
+            {quality.mean_brightness != null
+              ? (quality.is_dark ? 'Underexposed' : quality.is_overexposed ? 'Overexposed' : 'Balanced')
+              : 'Not measured'}
           </span>
         </div>
 

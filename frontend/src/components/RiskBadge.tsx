@@ -16,10 +16,18 @@ export const RiskBadge: React.FC<RiskBadgeProps> = ({ level, status, size = 'md'
     signalClass = 'badge-low';
   } else if (text === 'MEDIUM' || text === 'MEDIUM_RISK' || text === 'ROUTINE VERIFICATION') {
     signalClass = 'badge-medium';
-  } else if (text === 'HIGH' || text === 'HIGH_RISK' || text === 'REQUIRES_REVIEW' || text === 'REQUIRES_INSPECTION' || text === 'REVIEW_REQUIRED') {
+  } else if (text === 'HIGH' || text === 'HIGH_RISK' || text === 'REQUIRES_REVIEW' || text === 'REQUIRES_INSPECTION' || text === 'REVIEW_REQUIRED' || text === 'NO_FACE_DETECTED') {
+    // NO_FACE_DETECTED (face_service.py) is HIGH severity server-side (the
+    // detector couldn't even attempt a comparison) -- without this it fell
+    // through to the neutral/gray default below, reading as LESS concerning
+    // than a plain below-threshold REVIEW_REQUIRED match, which is backwards.
     signalClass = 'badge-high';
   } else if (text === 'CRITICAL' || text === 'ESCALATED' || text === 'REJECT') {
     signalClass = 'badge-critical';
+  } else if (text === 'MULTIPLE_FACES') {
+    // MEDIUM severity server-side -- same reasoning as NO_FACE_DETECTED
+    // above, one tier down to match face_service.py's own severity.
+    signalClass = 'badge-medium';
   } else if (text === 'PROCESSING') {
     signalClass = 'badge-pending';
   }
