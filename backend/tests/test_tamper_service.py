@@ -398,6 +398,76 @@ def test_analyze_emits_no_cnn_checks_when_no_trained_checkpoint_is_loaded(tmp_pa
     assert not any(c["id"].startswith("TAMPER_CNN_") for c in result["checks"])
 
 
+def test_analyze_skips_the_mrz_cnn_region_for_a_non_mrz_document_type(tmp_path):
+    """
+    Reproduces a real bug: before analyze() took a document_type param, the
+    CNN's third sampled region unconditionally treated the bottom 25% of
+    EVERY document as "the MRZ zone" and labeled its finding "Forensic CNN
+    — Mrz Region" regardless of document type -- wrong for the 6 document
+    types (Aadhaar, PAN, Driving Licence, Voter ID, Visa, Permit) that carry
+    no ICAO MRZ by design. Only 2 CNN regions (portrait, center) should run
+    for those document types.
+    """
+    doc_path = str(tmp_path / "doc.jpg")
+    _real_document_shaped_image(doc_path)
+
+    service = TamperDetectionService()
+    service.cnn_ready = True
+    service.model = _FixedProbabilityModel(tampered_logit=-5.0)
+
+    result = service.analyze(doc_path, "test-case-non-mrz-doc", document_type="AADHAAR")
+
+    cnn_checks = [c for c in result["checks"] if c["id"].startswith("TAMPER_CNN_")]
+    assert len(cnn_checks) == 2
+    assert {c["id"] for c in cnn_checks} == {"TAMPER_CNN_PORTRAIT_REGION", "TAMPER_CNN_CENTER_REGION"}
+    assert not any(c["id"] == "TAMPER_CNN_MRZ_REGION" for c in cnn_checks)
+
+
+def test_analyze_still_samples_the_mrz_cnn_region_for_a_passport(tmp_path):
+    """Passport is the one document type that genuinely carries an MRZ --
+    confirms the fix didn't just remove the region unconditionally."""
+    doc_path = str(tmp_path / "doc.jpg")
+    _real_document_shaped_image(doc_path)
+
+    service = TamperDetectionService()
+    service.cnn_ready = True
+    service.model = _FixedProbabilityModel(tampered_logit=-5.0)
+
+    result = service.analyze(doc_path, "test-case-passport", document_type="PASSPORT")
+
+    assert any(c["id"] == "TAMPER_CNN_MRZ_REGION" for c in result["checks"])
+
+
+def test_analyze_defaults_to_mrz_aware_behavior_when_document_type_is_not_passed(tmp_path):
+    """Backward compatibility for any caller not yet updated to pass
+    document_type -- must behave exactly as before (MRZ region sampled),
+    not silently start skipping it for every caller that omits the arg."""
+    doc_path = str(tmp_path / "doc.jpg")
+    _real_document_shaped_image(doc_path)
+
+    service = TamperDetectionService()
+    service.cnn_ready = True
+    service.model = _FixedProbabilityModel(tampered_logit=-5.0)
+
+    result = service.analyze(doc_path, "test-case-no-doc-type")
+
+    assert any(c["id"] == "TAMPER_CNN_MRZ_REGION" for c in result["checks"])
+
+
+def test_text_compression_check_is_not_applicable_for_a_non_mrz_document_type(tmp_path):
+    """The 'Text/MRZ Compression Consistency' check must show NOT_APPLICABLE
+    for a document type with no MRZ, not run the pixel comparison against a
+    region that isn't actually an MRZ and risk a wrongly-labeled PASS/FAIL."""
+    doc_path = str(tmp_path / "doc.jpg")
+    _real_document_shaped_image(doc_path)
+
+    service = TamperDetectionService()
+    result = service.analyze(doc_path, "test-case-non-mrz-text", document_type="DRIVING_LICENSE")
+
+    check = next(c for c in result["checks"] if c["id"] == "TAMPER_TEXT_COMPRESSION_ANOMALY")
+    assert check["status"] == "NOT_APPLICABLE"
+
+
 def test_analyze_emits_pass_checks_for_every_category_on_a_clean_document(tmp_path):
     """A clean document must show a populated evidentiary trail (ELA,
     edge/splice scan, portrait boundary, text compression, EXIF), not

@@ -42,7 +42,15 @@ def fuzzy_equal(a: str, b: str, max_distance: int = 1, min_length: int = 6) -> b
     collision) never qualify."""
     if not a or not b:
         return False
-    if len(a) < min_length or abs(len(a) - len(b)) > max_distance:
+    # Both sides must individually clear min_length, not just `a` -- the
+    # length-difference cap alone only enforces `len(b) >= min_length -
+    # max_distance` on the second argument, one shorter than intended at
+    # the boundary (e.g. min_length=6, max_distance=1 let a 5-character
+    # `b` through). Both real call sites (watchlist_service.py's document-
+    # number check, rules_engine.py's RULE 4 OCR-vs-MRZ crosscheck) pass
+    # the noisier/OCR-read value as `b`, so this mattered on the side most
+    # likely to actually be short due to a misread.
+    if len(a) < min_length or len(b) < min_length or abs(len(a) - len(b)) > max_distance:
         return False
     return levenshtein(a, b) <= max_distance
 

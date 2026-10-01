@@ -34,7 +34,7 @@ class MRZService:
             line = line.replace(ch, '<')
         
         # In trailing filler zone, lowercase c, e, o often misread for <
-        line = re.sub(r'[ce]{2,}', lambda m: '<' * len(m.group(0)), line)
+        line = re.sub(r'[ceo]{2,}', lambda m: '<' * len(m.group(0)), line)
         line = re.sub(r'[^A-Za-z0-9<]', '', line).upper()
         return line
 

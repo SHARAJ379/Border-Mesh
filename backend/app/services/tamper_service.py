@@ -22,6 +22,21 @@ WEIGHTS_PATH = Path(__file__).resolve().parent.parent / "ml" / "weights" / "tamp
 
 
 class TamperDetectionService(BaseTamperService):
+    # Kept in sync with (but intentionally not imported from)
+    # DocumentRulesEngine.NON_MRZ_DOCUMENT_TYPES / TesseractOCRService.
+    # NON_MRZ_DOCUMENT_TYPES, matching this codebase's existing convention
+    # of duplicating this exact tuple independently at each call site.
+    # Before `analyze()` took a document_type param, analyze_text_compression
+    # and the CNN's third sampled region both unconditionally treated the
+    # bottom 25% of EVERY document image as "the MRZ zone" -- true only for
+    # Passport. For the other 6 document types (none of which carry an ICAO
+    # MRZ by design), that region is just whatever the template prints there
+    # (signature block, barcode, blank margin), so a compression-divergence
+    # or CNN finding there was being surfaced to the officer mislabeled as
+    # "Machine Readable Zone" evidence that document type cannot structurally
+    # have.
+    NON_MRZ_DOCUMENT_TYPES = ("AADHAAR", "PAN", "DRIVING_LICENSE", "VOTER_ID", "VISA", "PERMIT")
+
     # Camera/scanner capture pipelines never write one of these as their own
     # EXIF Software tag -- each name here belongs exclusively to a
     # post-capture image editor, so a match has no legitimate documentary-
@@ -74,11 +89,17 @@ class TamperDetectionService(BaseTamperService):
             # clear the HIGH threshold (0.70) instead of being diluted to a
             # MEDIUM nudge regardless of how certain the model is.
             base_score = max(base_score, cnn_tamper_prob * 0.85)
-        if signals:
+        # Excludes the ELA signal itself (type "compression_anomaly") --
+        # its contribution is already the `mean_ela * 2.0` term above;
+        # `signals` as passed in by analyze() also contains it (needed
+        # there to build the TAMPER_ELA check), so including it here too
+        # double-counted the same evidence twice in the aggregate.
+        other_signals = [sig for sig in signals if sig.get("type") != "compression_anomaly"]
+        if other_signals:
             # Weight each signal's contribution by its own confidence rather
             # than a flat amount -- a barely-there anomaly (confidence ~0.5)
             # should not count the same as a near-certain one (confidence ~0.95).
-            base_score += sum(0.25 * sig.get("confidence", 0.8) for sig in signals)
+            base_score += sum(0.25 * sig.get("confidence", 0.8) for sig in other_signals)
 
         return min(0.96, max(0.04, round(base_score, 2)))
 
@@ -291,7 +312,12 @@ class TamperDetectionService(BaseTamperService):
             score_impact=round(confidence * self._CHECK_SCORE_IMPACT_PER_CONFIDENCE, 1),
         )
 
-    def analyze(self, image_path: str, case_id: str) -> Dict[str, Any]:
+    def analyze(self, image_path: str, case_id: str, document_type: Optional[str] = None) -> Dict[str, Any]:
+        # `document_type is None` (an as-yet-unupdated caller) is treated
+        # the same as a genuine MRZ-bearing document -- conservative,
+        # preserves this method's prior behavior rather than silently
+        # changing what callers that haven't passed it get.
+        has_mrz = document_type is None or document_type not in self.NON_MRZ_DOCUMENT_TYPES
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"Document image not found: {image_path}")
 
@@ -326,9 +352,15 @@ class TamperDetectionService(BaseTamperService):
         portrait_res = self.analyze_portrait_region(img_cv)
         signals.extend(portrait_res["signals"])
 
-        # 4. Text region recompression (Signal D)
-        text_res = self.analyze_text_compression(img_cv, ela_gray)
-        signals.extend(text_res["signals"])
+        # 4. Text region recompression (Signal D) -- MRZ-bearing documents
+        # only; see NON_MRZ_DOCUMENT_TYPES above for why this can't run
+        # meaningfully (or honestly label what it measured) on the other 6
+        # document types.
+        if has_mrz:
+            text_res = self.analyze_text_compression(img_cv, ela_gray)
+            signals.extend(text_res["signals"])
+        else:
+            text_res = {"is_anomaly": False, "ratio": None, "signals": []}
 
         # 5. Patch-level CNN feature scoring (only once a trained checkpoint is
         # loaded -- see __init__). Sample multiple document regions rather than
@@ -342,8 +374,9 @@ class TamperDetectionService(BaseTamperService):
         cnn_regions = [
             ("portrait", (int(h*0.15), int(h*0.75), int(w*0.05), int(w*0.45))),
             ("center", (h//2 - 64, h//2 + 64, w//2 - 64, w//2 + 64)),
-            ("mrz", (int(h*0.75), h, 0, w)),
         ]
+        if has_mrz:
+            cnn_regions.append(("mrz", (int(h*0.75), h, 0, w)))
         cnn_region_results: List[Dict[str, Any]] = []
         if self.cnn_ready:
             for region_name, (y1, y2, x1, x2) in cnn_regions:
@@ -438,24 +471,34 @@ class TamperDetectionService(BaseTamperService):
 
         # Text/MRZ compression consistency -- ratio is cited whether or not
         # it fired, so a clean result states the real measured ratio instead
-        # of silence.
-        text_evidence = make_evidence(measured_value=round(text_res["ratio"], 3), threshold_value=0.85, unit="mrz_body_compression_ratio")
-        if text_res["signals"]:
-            sig = text_res["signals"][0]
+        # of silence. NOT_APPLICABLE (not a silent PASS) for the 6 document
+        # types with no MRZ by design -- same posture as rules_engine.py's
+        # RULE 1 MRZ_PRESENCE check for the same document types.
+        if not has_mrz:
             checks.append(make_check(
                 id="TAMPER_TEXT_COMPRESSION_ANOMALY", category="TAMPER", factor=RiskFactorKey.TAMPER,
-                label="Text/MRZ Compression Consistency", status=RiskCheckStatus.FAIL,
-                severity=severity_for(sig["confidence"]), confidence=sig["confidence"],
-                explanation=sig["explanation"], evidence=text_evidence,
-                score_impact=round(sig["confidence"] * self._CHECK_SCORE_IMPACT_PER_CONFIDENCE, 1),
+                label="Text/MRZ Compression Consistency", status=RiskCheckStatus.NOT_APPLICABLE,
+                confidence=0.95,
+                explanation="Not applicable — this document type does not carry an ICAO Machine Readable Zone by design.",
             ))
         else:
-            checks.append(make_check(
-                id="TAMPER_TEXT_COMPRESSION_ANOMALY", category="TAMPER", factor=RiskFactorKey.TAMPER,
-                label="Text/MRZ Compression Consistency", status=RiskCheckStatus.PASS, confidence=0.8,
-                explanation="Machine Readable Zone and main document body show consistent compression levels.",
-                evidence=text_evidence,
-            ))
+            text_evidence = make_evidence(measured_value=round(text_res["ratio"], 3), threshold_value=0.85, unit="mrz_body_compression_ratio")
+            if text_res["signals"]:
+                sig = text_res["signals"][0]
+                checks.append(make_check(
+                    id="TAMPER_TEXT_COMPRESSION_ANOMALY", category="TAMPER", factor=RiskFactorKey.TAMPER,
+                    label="Text/MRZ Compression Consistency", status=RiskCheckStatus.FAIL,
+                    severity=severity_for(sig["confidence"]), confidence=sig["confidence"],
+                    explanation=sig["explanation"], evidence=text_evidence,
+                    score_impact=round(sig["confidence"] * self._CHECK_SCORE_IMPACT_PER_CONFIDENCE, 1),
+                ))
+            else:
+                checks.append(make_check(
+                    id="TAMPER_TEXT_COMPRESSION_ANOMALY", category="TAMPER", factor=RiskFactorKey.TAMPER,
+                    label="Text/MRZ Compression Consistency", status=RiskCheckStatus.PASS, confidence=0.8,
+                    explanation="Machine Readable Zone and main document body show consistent compression levels.",
+                    evidence=text_evidence,
+                ))
 
         # CNN per-region forgery probability -- the priority addition: each
         # sampled region becomes its OWN check with its own region box, not

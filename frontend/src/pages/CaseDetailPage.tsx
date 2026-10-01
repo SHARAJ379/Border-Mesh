@@ -94,8 +94,13 @@ export const CaseDetailPage: React.FC<CaseDetailPageProps> = ({ caseId, onBack }
     {
       factor: 'Forensic Tamper AI',
       weight: 0.30,
-      raw_risk: (analysis?.tamper_result?.tamper_risk || 0.1) * 100,
-      weighted_contribution: ((analysis?.tamper_result?.tamper_risk || 0.1) * 100) * 0.30,
+      // `?? 0.1`, not `||` -- a genuinely clean 0.0 tamper_risk reading
+      // (possible on seeded demo data, which bypasses
+      // _aggregate_tamper_score's own 0.04 floor) is falsy and would
+      // otherwise be swallowed into the "no data" fallback, same bug
+      // class already fixed once this session in FaceVerification.tsx.
+      raw_risk: (analysis?.tamper_result?.tamper_risk ?? 0.1) * 100,
+      weighted_contribution: ((analysis?.tamper_result?.tamper_risk ?? 0.1) * 100) * 0.30,
     },
     {
       factor: 'Biometric Face Verification',

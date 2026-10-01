@@ -167,7 +167,8 @@ export const ComplianceDashboardPage: React.FC = () => {
           </div>
           <div className="text-[11px] text-muted pt-1">
             Access control: {status.access_control.mechanism}, required for{' '}
-            {status.access_control.officer_key_required_for.join(', ')}.
+            {status.access_control.authentication_required_for.join(', ')}. Public without login:{' '}
+            {status.access_control.public_without_login.join(', ')}.
           </div>
         </PrincipleCard>
 

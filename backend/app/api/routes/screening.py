@@ -268,8 +268,9 @@ def process_tamper_analysis(case_id: str, db: Session = Depends(get_db), _office
         raise HTTPException(status_code=404, detail="Document analysis record not found.")
 
     tamper_svc = get_tamper_service()
+    doc_type = (analysis.ocr_result or {}).get("fields", {}).get("document_type")
     with decrypted_tempfile(analysis.document_image_path) as doc_tmp_path:
-        tamper_result = tamper_svc.analyze(doc_tmp_path, case_id)
+        tamper_result = tamper_svc.analyze(doc_tmp_path, case_id, document_type=doc_type)
 
     # tamper_svc.analyze() writes its ELA heatmap directly to this path as
     # plaintext (it has no idea encryption exists) -- encrypt it in place

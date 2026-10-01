@@ -490,7 +490,9 @@ def _execute_scenario(cfg: Dict[str, Any], db: Session, actor: str = "OFFICER-DE
 
             # Step 4: Tamper Forensics
             tamper_svc = get_tamper_service()
-            tamper_result = tamper_svc.analyze(doc_tmp_path, case_uid)
+            tamper_result = tamper_svc.analyze(
+                doc_tmp_path, case_uid, document_type=ocr_result.get("fields", {}).get("document_type")
+            )
             AuditService.log(db, "TAMPER_ANALYSIS_COMPLETED", case_uid, actor="AI-TAMPER-FORENSICS")
 
             # Step 5: Face Verification

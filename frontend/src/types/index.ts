@@ -302,7 +302,8 @@ export interface DpdpComplianceStatus {
   };
   access_control: {
     mechanism: string;
-    officer_key_required_for: string[];
+    authentication_required_for: string[];
+    public_without_login: string[];
   };
   known_gaps: Array<{ control: string; gap: string }>;
 }

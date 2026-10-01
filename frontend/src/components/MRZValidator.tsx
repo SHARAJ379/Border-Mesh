@@ -22,7 +22,7 @@ interface MRZValidatorProps {
 // backend, matching this codebase's existing style of duplicating this exact
 // tuple independently at each of its call sites rather than sharing one
 // constant across the Python backend and this TypeScript frontend.
-const NON_MRZ_DOCUMENT_TYPES = new Set(['AADHAAR', 'PAN', 'DRIVING_LICENSE', 'VOTER_ID', 'VISA']);
+const NON_MRZ_DOCUMENT_TYPES = new Set(['AADHAAR', 'PAN', 'DRIVING_LICENSE', 'VOTER_ID', 'VISA', 'PERMIT']);
 
 const EmptyState: React.FC<{ variant: 'expected' | 'missing' }> = ({ variant }) => (
   <div className="border border-hairline p-6 text-center">

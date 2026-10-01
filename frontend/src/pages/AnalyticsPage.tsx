@@ -91,7 +91,12 @@ export const AnalyticsPage: React.FC = () => {
       label: 'Risk mitigation rate',
       value: `${stats.documents_screened > 0 ? Math.round((stats.cleared_cases / stats.documents_screened) * 100) : 0}%`,
       icon: ShieldCheck,
-      note: 'Admitted without secondary inspection'
+      // cleared_cases (dashboard.py) counts any case an officer marked
+      // CLEARED, regardless of whether it first went through secondary
+      // inspection -- "without secondary inspection" overstated what this
+      // actually measures (a HIGH-risk case escalated, inspected, then
+      // cleared still counts toward it).
+      note: 'Officer-cleared share of all screenings'
     },
     {
       label: 'Anomaly detection yield',

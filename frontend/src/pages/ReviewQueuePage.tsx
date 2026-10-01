@@ -58,12 +58,19 @@ export const ReviewQueuePage: React.FC<ReviewQueuePageProps> = ({ onSelectCase }
   };
 
   const filtered = cases.filter((c) => {
+    // This is a queue of cases still AWAITING disposition, not a risk-level
+    // archive (Cases Archive already covers that) -- the CRITICAL/HIGH/
+    // MEDIUM tabs are sub-views of the same "All Pending Review" set, not
+    // an independent risk-level filter. Previously only the ALL tab scoped
+    // to officer_decision === 'PENDING'; a case already CLEARED or
+    // ESCALATED stayed visible under its risk-level tab indefinitely,
+    // mixed in with cases genuinely still needing a decision.
     const matchesFilter =
       filterLevel === 'ALL'
         ? c.officer_decision === 'PENDING'
         : filterLevel === 'CLEARED'
         ? c.officer_decision === 'CLEARED'
-        : c.risk_level === filterLevel;
+        : c.risk_level === filterLevel && c.officer_decision === 'PENDING';
 
     const matchesSearch =
       c.case_number.toLowerCase().includes(searchQuery.toLowerCase()) ||

@@ -139,8 +139,15 @@ class AuditService:
                 metadata_str=meta_str
             )
 
-            # Check hash match
-            if log.entry_hash and log.entry_hash != expected_hash:
+            # Check hash match. A missing entry_hash must FAIL this check,
+            # not skip it -- `log.entry_hash and ...` previously let a block
+            # with a null/empty hash pass silently, the opposite of the
+            # "either alone is insufficient" design this function states
+            # above. AuditService.log() always computes a real hash before
+            # insert, so this path isn't reachable through the application's
+            # own writer today, but the verification itself should not rely
+            # on that as its only guarantee.
+            if not log.entry_hash or log.entry_hash != expected_hash:
                 return {
                     "valid": False,
                     "total_records": len(case_logs),
