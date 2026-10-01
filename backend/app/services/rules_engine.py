@@ -329,6 +329,58 @@ class DocumentRulesEngine:
             add("REQUIRED_FIELDS_PRESENCE", "Required Fields Presence", True, None,
                 "All mandatory identity fields detected.", 0.95)
 
+        # RULE 5b: Extracted Content Plausibility -- RULE 5 above only checks
+        # that the full_name/document_number fields are non-EMPTY, not that
+        # they look like an actual name or ID number. If the wrong file
+        # entirely is uploaded (a screenshot, a photo of something unrelated
+        # to any identity document), Tesseract still returns *something* --
+        # confidence is heuristically floored at 0.40 in extract_text() and
+        # was never a reliable "not a document" signal on its own -- and
+        # that garbled text can land in these fields and silently pass RULE
+        # 5's bare presence check (observed live: an unrelated image OCR'd
+        # into a full_name field reading "R= {(1, 1), 22), (8,3), (4,4),
+        # (6,5), (1, 2)}. R= {(1, 2), (2,3)...}" and a document_number of
+        # literally "DIFFERENT" -- both non-empty, both accepted, the case
+        # then scored and presented to the officer as if it were a real,
+        # if risky, document). A real name across every specimen/parser in
+        # this project is letters, spaces, and light punctuation --
+        # never digits or set-notation symbols; a real document number
+        # format here always contains at least one digit.
+        name_value = fields.get("full_name") or ""
+        if not name_value and mrz_data:
+            name_value = " ".join(filter(None, [mrz_data.get("given_names"), mrz_data.get("surname")])).strip()
+
+        implausible_name = False
+        if name_value:
+            non_name_chars = len(re.findall(r"[^A-Za-z\s'\-.]", name_value))
+            implausible_name = (non_name_chars / len(name_value) > 0.15) or len(name_value) > 80
+
+        doc_no_value = ocr_doc_no or mrz_doc_no or ""
+        implausible_doc_no = bool(doc_no_value) and not re.search(r'\d', doc_no_value)
+
+        if implausible_name or implausible_doc_no:
+            bad_fields = []
+            if implausible_name:
+                bad_fields.append(f"name ('{name_value[:60]}{'…' if len(name_value) > 60 else ''}')")
+            if implausible_doc_no:
+                bad_fields.append(f"document number ('{doc_no_value}')")
+            evidence = make_evidence(
+                measured_value="; ".join(bad_fields), threshold_value="plausible name / alphanumeric ID",
+                unit="extracted_content_plausibility",
+            )
+            verb = "does" if len(bad_fields) == 1 else "do"
+            add("DOCUMENT_CONTENT_PLAUSIBILITY", "Extracted Content Does Not Resemble an Identity Document",
+                False, "CRITICAL",
+                f"The extracted {' and '.join(bad_fields)} {verb} not resemble plausible identity-document content. "
+                f"This strongly suggests the uploaded file is not an identity document at all -- OCR ran "
+                f"successfully but on the wrong kind of image -- rather than a risk finding about a real "
+                f"document. Every other score on this case should be treated as meaningless until the correct "
+                f"document is (re-)uploaded.",
+                0.80, evidence=evidence, score_impact=30.0)
+        else:
+            add("DOCUMENT_CONTENT_PLAUSIBILITY", "Extracted Content Plausibility", True, None,
+                "Extracted name and document number both resemble genuine identity-document content.", 0.80)
+
         # RULE 6: Nationality Code Format (ISO 3166-1 alpha-3 in MRZ)
         if mrz_data and mrz_data.get("nationality"):
             nat = mrz_data["nationality"]

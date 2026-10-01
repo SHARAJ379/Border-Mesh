@@ -606,6 +606,57 @@ def test_declared_jurisdiction_crosscheck_not_applicable_when_document_country_u
     assert check["status"] == "NOT_APPLICABLE"
 
 
+def test_unrelated_image_garbled_into_implausible_name_is_flagged_critical():
+    """
+    Reproduces a real bug report: uploading a file that isn't an identity
+    document at all (observed live: a screenshot of unrelated material) --
+    Tesseract still returns *something*, and that garbled OCR output can
+    technically satisfy RULE 5's bare non-empty presence check while being
+    obviously not a name or ID number. Must be flagged CRITICAL (so the
+    critical-severity floor in risk_engine.py kicks in) rather than scored
+    as if it were a real, if risky, document.
+    """
+    ocr_data = {
+        "fields": {
+            "full_name": "R= {(1, 1), 22), (8,3), (4,4), (6,5), (1, 2)}. R= {(1, 2), (2,3), (3, 4), (4,5)}.",
+            "document_number": "DIFFERENT",
+        }
+    }
+    eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
+    check = _find(eval_res["checks"], "DOCUMENT_CONTENT_PLAUSIBILITY")
+    assert check["status"] == "FAIL"
+    assert check["severity"] == "CRITICAL"
+    assert "name" in check["explanation"].lower()
+    assert "document number" in check["explanation"].lower()
+
+
+def test_genuine_name_and_document_number_pass_plausibility_check():
+    ocr_data = {"fields": {"full_name": "ARIHANT KAUL", "document_number": "X1234567"}}
+    eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
+    check = _find(eval_res["checks"], "DOCUMENT_CONTENT_PLAUSIBILITY")
+    assert check["status"] == "PASS"
+
+
+def test_document_number_with_no_digits_at_all_is_implausible():
+    """Every real document-number format this project parses (passport, PAN,
+    driving licence, voter ID, visa, permit) contains at least one digit --
+    a pure-letters value like a stray English word is not a plausible ID."""
+    ocr_data = {"fields": {"full_name": "ARIHANT KAUL", "document_number": "DIFFERENT"}}
+    eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
+    check = _find(eval_res["checks"], "DOCUMENT_CONTENT_PLAUSIBILITY")
+    assert check["status"] == "FAIL"
+    assert check["severity"] == "CRITICAL"
+
+
+def test_hyphenated_apostrophe_name_is_not_falsely_flagged():
+    """Real names legitimately contain hyphens and apostrophes (e.g.
+    O'Brien, Smith-Jones) -- must not be penalized for that alone."""
+    ocr_data = {"fields": {"full_name": "MARY O'BRIEN-SMITH", "document_number": "X1234567"}}
+    eval_res = DocumentRulesEngine.evaluate(ocr_data, None)
+    check = _find(eval_res["checks"], "DOCUMENT_CONTENT_PLAUSIBILITY")
+    assert check["status"] == "PASS"
+
+
 def test_declared_jurisdiction_crosscheck_skipped_when_nothing_declared():
     """No declared_country passed at all (e.g. the 1-click demo scenario
     flow, which has no separate officer-intake step) -- the rule doesn't
