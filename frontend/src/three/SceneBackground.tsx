@@ -31,8 +31,8 @@ export function SceneBackground() {
         className="fixed inset-0 z-0 pointer-events-none"
         style={{
           background:
-            'radial-gradient(ellipse 80% 60% at 20% 0%, rgba(211,174,94,0.10), transparent 60%),' +
-            'radial-gradient(ellipse 70% 50% at 100% 100%, rgba(92,148,140,0.08), transparent 60%)',
+            'radial-gradient(ellipse 80% 60% at 20% 0%, rgba(56,189,248,0.10), transparent 60%),' +
+            'radial-gradient(ellipse 70% 50% at 100% 100%, rgba(74,222,128,0.07), transparent 60%)',
         }}
       />
     );

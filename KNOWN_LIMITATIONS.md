@@ -42,33 +42,83 @@ different, easier, in-distribution test. The 71.2%/39.5% CASIA numbers are the
 honest out-of-distribution measurement and are what should be quoted if asked
 about real-world accuracy, not the 87.8% figure.
 
-**Why it wasn't retrained close to judging:** it was tried. A real forgery
-dataset (SIDTD — real ID document forgeries, not just generic photo splices
-like CASIA) was integrated into the training pipeline specifically to close
-this gap. Across four training runs, every SIDTD-blended checkpoint reliably
-produced a **confident false positive on the project's own genuine demo
-specimens** — and it wasn't random noise, it was isolated specifically to the
-portrait/photo region. The root cause: this project's own synthetic document
-generator pastes the face photo onto the document with a plain, hard-edged
-rectangular `img.paste()` — which is structurally the same signature as a real
+**Why it wasn't retrained close to judging:** it was tried — twice, by two
+different theories of the root cause, both of which failed and were reverted.
+The committed checkpoint is intentionally unchanged (CASIA-only, trained on
+this project's own synthetic splices plus CASIA photo-splice data — not
+SIDTD).
+
+*Attempt 1 (undersized model):* a real forgery dataset (SIDTD — real ID
+document forgeries, not just generic photo splices like CASIA) was integrated
+into the training pipeline specifically to close this gap. Across four
+training runs, every SIDTD-blended checkpoint reliably produced a **confident
+false positive on the project's own genuine demo specimens** — and it wasn't
+random noise, it was isolated specifically to the portrait/photo region. The
+suspected root cause: this project's own synthetic document generator pastes
+the face photo onto the document with a plain, hard-edged rectangular
+`img.paste()` — which is structurally the same signature as a real
 crop-and-replace forgery. SIDTD's real portrait-tampering examples taught the
 CNN to recognize exactly that signature, so it started flagging the project's
 own genuine specimens as tampered. That's a legitimate, independently-found
 bug (since fixed — the generator now feathers the paste edge), but it
-surfaced days before judging, and the tiny 25k-parameter CNN couldn't yet
-absorb SIDTD's narrow portrait-tampering examples without overfitting new
-spurious correlations elsewhere. Shipping an under-tested retrain with unknown
-new failure modes was judged riskier than shipping the known, honestly-
-disclosed CASIA number. The committed checkpoint is intentionally unchanged
-(CASIA-only, trained on this project's own synthetic splices plus CASIA
-photo-splice data — not SIDTD). The SIDTD loader and infrastructure are kept
-in the codebase for a future attempt with a larger model or more in-domain
-data.
+surfaced days before judging, and the tiny 25k-parameter CNN was suspected too
+small to absorb SIDTD's narrow portrait-tampering examples without overfitting
+new spurious correlations elsewhere.
 
-**If asked directly:** "71% accuracy, 40% recall on real forgeries, measured
-honestly against CASIA v2.0. We found and partially fixed a real bug trying
-to improve it with real document-forgery data, but the fix came late and the
-retrain wasn't stable enough to trust over the known baseline before judging."
+*Attempt 2 (bigger model, to test that theory directly):* a ~250k-parameter,
+4-conv-layer version of the CNN was trained on the same SIDTD-blended data,
+with a corrected (and now-committed) `_split_files` train/test split so the
+held-out numbers would be genuinely unseen data for once. Held-out accuracy on
+CASIA/SIDTD themselves did get genuinely better (SIDTD recall roughly
+32%→89%), confirming capacity was part of the story — but the bigger model's
+own sanity check (fresh genuine specimens from this project's own generator)
+still scored a confident 0.94 mean tamper-risk, no better than attempt 1's
+failures. **Model capacity was not the actual root cause.** The model, at
+either size, keeps learning real-photograph sensor/compression statistics
+(CASIA and SIDTD are both camera photos) that conflict with this project's
+clean, noise-free synthetic document renders — a domain-mismatch problem, not
+a capacity problem. This attempt was also reverted; the committed checkpoint
+and architecture are unchanged from before either attempt. Don't re-attempt a
+bigger model as the fix without addressing the domain mismatch directly (e.g.
+photographing/degrading the project's own synthetic specimens before
+training, not just reweighting domain sampling or scaling the model — both
+already tried). The `_split_files`-based held-out split infrastructure in
+`scripts/generate_tamper_training_data.py` is kept and now used by both
+`scripts/evaluate_tamper_on_casia.py --split test` and the new
+`scripts/evaluate_tamper_on_sidtd.py`, for whenever a future attempt happens.
+
+**A second, independent out-of-distribution number, measured for the first
+time while writing this update:** the committed checkpoint — trained on
+synthetic splices + CASIA only, never on SIDTD in any form — was run against
+the full SIDTD document-forgery set (11,332 patches: 6,444 authentic, 4,888
+tampered) via the new `scripts/evaluate_tamper_on_sidtd.py`:
+
+| Metric | Value |
+|---|---|
+| Accuracy | **60.0%** |
+| Recall (tampered patches actually caught) | **32.0%** (TP=1,562, FN=3,326) |
+| Precision | 56.5% |
+| F1 | 40.8% |
+| False-accept rate (authentic flagged as tampered) | 18.7% |
+| False-reject rate (tampered missed entirely) | 68.0% |
+
+Read plainly: against real document forgeries specifically (as opposed to
+CASIA's generic photo splices), the committed model does worse on every axis
+— recall drops from 39.5% to 32.0%, and the false-accept rate more than
+doubles (7.8%→18.7%). This is consistent with, not contradicted by, attempt
+2's 89% recall figure above: that number came from a differently-trained,
+differently-sized, since-reverted checkpoint, not the one actually shipped.
+
+**If asked directly:** "71% accuracy, 40% recall on real photo splices (CASIA);
+60% accuracy, 32% recall on real document forgeries specifically (SIDTD),
+measured honestly and both out-of-distribution for the committed model. We
+tried twice to close the gap with real document-forgery training data — first
+suspecting the model was too small, then confirming a bigger model wasn't the
+fix either — and both attempts produced a confident false positive on our own
+genuine specimens, so both were reverted rather than shipped under time
+pressure. The actual blocker is a domain mismatch between real camera photos
+and our clean synthetic renders, not model size, and fixing that properly
+needs more than a retrain."
 
 ---
 
@@ -155,17 +205,22 @@ facenet-pytorch InceptionResnetV1 pretrained on VGGFace2** — 98.0% LFW
 same-age accuracy, 0.60% false-accept rate, 3.40% false-reject rate at the
 0.72 match threshold. No fine-tuning of any kind is active.
 
-**Two fine-tuning attempts were made, both measured, both failed, both
-correctly reverted / never promoted:**
+**Five fine-tuning attempts were made, all measured, none promoted to
+production — the fourth and fifth are the closest yet, and neither is a
+win:**
 
-| | Baseline (production) | Attempt 1: FG-NET only | Attempt 2: FG-NET + CALFW |
-|---|---|---|---|
-| Training data | — (stock pretrained) | 82 identities, cross-age only | FG-NET + CALFW combined |
-| LFW same-age accuracy | **98.0%** | 86.7% (best threshold) | 52.1% (best threshold — near coin-flip) |
-| False-accept rate | **0.60%** | 10.20% (~17× worse) | 93.4% (essentially broken) |
-| Outcome | shipped | wired in briefly, then reverted | never promoted past candidate |
+| | Baseline (production) | Attempt 1: FG-NET only | Attempt 2: FG-NET + CALFW | Attempt 3: FG-NET + CALFW, ArcFace loss | Attempt 4: + CelebA + WebFace4M sample, ArcFace | Attempt 5: full CelebA + 4x WebFace4M sample, ArcFace (partial) |
+|---|---|---|---|---|---|---|
+| Training data | — (stock pretrained) | 82 identities, cross-age only | FG-NET + CALFW combined | same as attempt 2 | FG-NET + CALFW + CelebA (6 shards) + WebFace4M (6-shard/~211k-image sample), 221,516 images, 52,978 identities | FG-NET + CALFW + CelebA (all 19 shards) + WebFace4M (24-shard/~843k-image sample), ~1.26M images |
+| Objective | — | softmax classification | softmax classification | ArcFace additive angular margin | same as attempt 3 | same as attempt 3/4 |
+| Images/identity (avg) | — | — | ~3.2 | ~3.2 | ~4.2 (CelebA alone: ~21; WebFace4M alone: ~4.6) | similar ratio, ~4.6x attempt 4's volume |
+| Epochs completed | — | — | — | — | 8/8 (full) | **4/5 — OOM-killed by the OS before the 5th**, see below |
+| LFW same-age accuracy | **98.0%** | 86.7% (best threshold) | 52.1% (best threshold — near coin-flip) | 83.5% (best threshold) | 96.7% (best threshold) | **96.4%** (best threshold) |
+| False-accept rate | **0.60%** | 10.20% (~17× worse) | 93.4% (essentially broken) | 9.40% (~16× worse) | 3.00% (5× worse) | **2.40%** (4× worse) |
+| False-reject rate | **3.40%** | — | — | 23.6% | 3.60% | **4.80%** |
+| Outcome | shipped | wired in briefly, then reverted | never promoted past candidate | never promoted past candidate | clears the project's literal ≥95% gate; NOT shipped anyway (see below) | same as attempt 4 — clears ≥95%, NOT shipped |
 
-Both right-hand numbers were independently re-run while preparing this
+All right-hand numbers were independently re-run while preparing this
 document, against the actual preserved checkpoint files, not taken on faith.
 
 - **Attempt 1 (FG-NET only):** unfroze only the embedder's last block, trained
@@ -182,18 +237,94 @@ document, against the actual preserved checkpoint files, not taken on faith.
   collapsing accuracy to barely better than chance. It was never wired into
   the app even briefly — caught at the candidate-checkpoint evaluation gate
   this project's own policy requires before promotion.
+- **Attempt 3 (FG-NET + CALFW, ArcFace loss):** same data as attempt 2, a
+  different hypothesis — that attempt 1/2's plain softmax classification
+  head was the root cause (optimizing closed-set classification accuracy on
+  training identities, not the open-set cosine-similarity structure
+  verification actually needs), not data volume. Replaced it with ArcFace
+  (additive angular margin loss, Deng et al. 2019), which trains the
+  embedding directly against the same cosine-similarity scoring
+  `face_verifier.py` uses at inference. Result: still a regression (98.0% →
+  83.5% at best threshold, 9.40% false-accept), on the same order as attempt
+  1, not the catastrophic collapse of attempt 2, but not a fix either. The
+  hypothesis was only partly right — changing the objective avoided the
+  total collapse, but didn't close the gap. The more likely dominant factor:
+  13,175 images across 4,106 identities is ~3.2 images per identity on
+  average, a thin margin for learning a robust metric under *any* objective.
+  Checkpoint kept on disk as `face_embedder_finetuned_arcface.pth`
+  (deliberately not the auto-loaded filename) for reproducibility.
 
-**Why not attempt a third try:** the intended full fix (FG-NET + YLFW-Dev-
-Train-Balanced, a larger, purpose-built cross-age benchmark) is blocked
-behind a license agreement that was never obtained. Without it, there's no
-known combination of available real cross-age data that has produced a
-working improvement — two honest attempts, two honest failures.
+- **Attempt 4 (FG-NET + CALFW + CelebA + WebFace4M sample, ArcFace):** tested
+  the hypothesis attempt 3 left open directly — that per-identity thinness
+  (~3.2 images/identity), not the loss function, was the dominant cause of
+  attempts 1-3's failures. Added two real, properly-licensed datasets with
+  real depth: CelebA (flwrlabs/celeba, official research-release-agreement
+  license, ~21 images/identity) and a 6-shard (~211k-image) sample of the
+  official WebFace4M subset of WebFace42M (gaunernst/webface4m-wds-gz,
+  non-commercial-research license) — not the full 42M-image corpus, which
+  would be a multi-day multi-GPU undertaking, not something run here.
+  Explicitly excluded LFW (would contaminate the evaluation benchmark every
+  number on this page is measured against), WIDER FACE (face-detection-only,
+  zero identity labels — confirmed, not assumed), FairFace (single image per
+  sample, no identity grouping — confirmed, not assumed), and MS-Celeb-1M
+  (withdrawn by Microsoft in 2019 after non-consensual scraping was exposed,
+  documented use by surveillance vendors in human-rights-abuse contexts —
+  not used regardless of mirror availability). Result: 96.7% accuracy, 3.00%
+  false-accept at best threshold — by far the closest any attempt has come,
+  and the first to clear the project's own stated ≥95% candidate-promotion
+  bar. **Not shipped anyway.** That bar was written as a regression floor
+  against catastrophic failures (52%, 86.7%), not as "ship anything above
+  95% even when the thing already in production is better" — and the stock
+  model is still better on every metric, including a 5× lower false-accept
+  rate, the specific failure mode (matching two different people as the same
+  person) that matters most for a border-security tool. Clearing the literal
+  number isn't the same as this being an improvement; it confirms the
+  per-identity-depth hypothesis was right without actually fixing the
+  product. Checkpoint kept on disk as `face_embedder_finetuned_bigdata.pth`
+  for reproducibility.
+- **Attempt 5 (full CelebA + 4x WebFace4M sample, ArcFace, partial):** scaled
+  attempt 4 up further -- all 19 CelebA shards instead of 6, 24 WebFace4M
+  shards instead of 6 (~1.26M images total, ~4.6x attempt 4's volume) -- to
+  test whether the per-identity-depth lever had more room to run. It didn't,
+  clearly: 96.4% accuracy, 2.40% false-accept at 4/5 epochs (the run was
+  OOM-killed by the OS before the 5th epoch could complete on this 15.2GB-RAM
+  machine -- see below). That's statistically a wash against attempt 4's
+  96.7%/3.00%, not a further improvement, despite 4.6x more data. Confirms
+  diminishing returns on the "more data, same approach" lever specifically,
+  independent of the memory ceiling that cut the run short. Checkpoint kept
+  on disk as `face_embedder_finetuned_bigdata_v2.pth`.
+
+**Infrastructure note (attempt 5):** two earlier launch attempts at this
+scale were OOM-killed almost immediately (one with 24 WebFace4M shards/4
+DataLoader workers, one with a reduced 12-shard/1-worker config) -- both
+failed at an almost identical ~3.6GB-free ceiling, pointing at persistent
+baseline load from other applications already running on the host rather
+than this script's own tunables. The third launch (after freeing some
+memory) survived the critical allocation phase at under 0.5GB free and
+completed 4 epochs before the OS killed it again. Not a face-recognition
+finding -- a reminder that this project's training runs are bounded by
+whatever else is running on the machine they're executed on, not just by
+data/model size.
+
+**Why not keep going on this lever:** five attempts across three different
+angles (data breadth, training objective, and now data depth at two scales)
+have progressively closed the gap without closing it, and the jump from
+attempt 4 to attempt 5's 4.6x-larger dataset produced no further improvement.
+The remaining honest options are the same as before: FG-NET + YLFW-Dev-Train-
+Balanced (still license-gated, never obtained) or a larger properly-licensed
+dataset with even deeper per-identity coverage than CelebA/WebFace4M
+provided -- not simply more of the same shape of data. Diminishing, not
+exhausted -- but nothing on hand right now has closed the remaining gap.
 
 **If asked directly:** "Face matching is stock, pretrained VGGFace2 — 98%
-accuracy on the standard benchmark. We tried fine-tuning it for better
-cross-age matching twice, measured both attempts honestly, both regressed
-accuracy badly, and both were correctly not shipped. The dataset that might
-actually fix this is gated behind a license we don't have."
+accuracy on the standard benchmark. We've tried fine-tuning it for better
+cross-age matching five times now — different training objectives, then
+dramatically more and richer data at two scales — measured every attempt
+honestly. The closest attempts got to ~96.5-96.7% accuracy and 2.4-3%
+false-accept, still worse than
+the 98%/0.6% already shipping, so none of the five were promoted. The
+dataset that might actually close the remaining gap is gated behind a
+license we don't have."
 
 ---
 

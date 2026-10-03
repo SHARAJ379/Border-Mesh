@@ -1,26 +1,29 @@
 @import "tailwindcss";
 
 @theme {
-  /* Dark dossier system -- same warm-paper design language (serif
-     headings, hairline rules, flat borders, restrained accent, zero
-     shadow/radius) but with the ground/ink relationship inverted: ground
-     is a deep ink-navy, "paper" text is a warm cream, and the accent blue
-     is brightened so it still reads as a deliberate rule/type color
-     against the dark ground rather than washing out. The original
-     cream-paper values are kept below as a comment for quick reference /
-     reversion. One ink blue remains the single accent -- reserved for
-     type, a rule, or a drawn line, NEVER a filled area (enforced by
-     convention in every component below, not by the type system). */
-  --color-paper: #12161F;
-  --color-paper-dim: #1B2130;
-  --color-ink: #EDE7D9;
-  --color-ink-soft: #B7B0A0;
-  --color-muted: #837D6E;
-  --color-accent: #7096E0;
-  --color-hairline: rgba(237, 231, 217, 0.14);
-  /* Previous light values -- paper #EFE9DD, paper-dim #E5DED0,
-     ink #141C2B, ink-soft #4A5364, muted #767E8C, accent #2C4A8F,
-     hairline rgba(20,28,43,0.16). */
+  /* Blockchain / cybersecurity system, replacing the warm-paper "maker's
+     landing page" look (see git history for that version). Grounded via
+     ui-ux-pro-max's --design-system + --domain color/style/typography
+     searches rather than guessed: base is the tool's "Trust blue + profit
+     green on dark" fintech/security palette (slate-ink ground, not pure
+     OLED black -- reads as a serious verification console, not a
+     cyberpunk/matrix pastiche, which the dataset's own "Cyberpunk UI"
+     entry flagged as gaming/crypto-app territory and a worse fit for a
+     Ministry-of-Home-Affairs-facing tool). Same structural rules as
+     before carry over unchanged: one accent reserved for type/rules/drawn
+     lines, never a filled area (buttons still fill with ink, never
+     accent); radius and shadow stay at the previous flat/zero values
+     (see below) since dozens of already-reviewed files assume them --
+     the "technical ledger" read now comes from color, type and the
+     revived MeshNetwork/DashboardHeroBackground WebGL layers instead of
+     from corner radius. */
+  --color-paper: #0B1120;
+  --color-paper-dim: #141B2E;
+  --color-ink: #EDF1F9;
+  --color-ink-soft: #9FACC4;
+  --color-muted: #64739B;
+  --color-accent: #38BDF8;
+  --color-hairline: rgba(159, 172, 196, 0.16);
 
   /* Dedicated dark shadow tone for .photo-shadow -- a printed photo's
      drop shadow should stay a real shadow (dark) regardless of theme, so
@@ -88,10 +91,10 @@
      being flattened to a single color -- but used with the same restraint
      as the accent blue: text and rules, never a filled area, except the
      one filled square reserved for CRITICAL alone (see .badge-critical). */
-  --color-signal-low: #82AC76;
-  --color-signal-medium: #D7AE5F;
-  --color-signal-high: #DA9265;
-  --color-signal-critical: #DD7367;
+  --color-signal-low: #4ADE80;
+  --color-signal-medium: #FBBF24;
+  --color-signal-high: #FB923C;
+  --color-signal-critical: #F87171;
 
   /* Tailwind's built-in emerald/amber/orange/rose/sky scales are used
      throughout the codebase (status dots, icon colors, chart accents) --
@@ -163,16 +166,20 @@
   --color-sky-900: #101D2F;
   --color-sky-950: #E5DED0;
 
-  /* Newsreader (serif) carries every heading -- its italic is reserved for
-     the one emphasised phrase per heading, set in the accent blue. Courier
-     Prime (typewriter monospace) carries everything else: body copy,
-     labels, data, table cells -- it replaces IBM Plex Sans/Mono entirely,
-     since this system draws no distinction between "UI chrome" and
-     "machine-readable data" the way the previous one did. Both loaded in
+  /* Space Grotesk (geometric, technical display face) carries every
+     heading -- its italic is reserved for the one emphasised phrase per
+     heading, set in the accent blue. Inter carries body copy, labels and
+     UI chrome. JetBrains Mono is new: every `.figure` (tabular numbers,
+     risk scores, hashes, timestamps, MRZ strings) now routes through a
+     real monospace instead of Courier Prime standing in for both roles --
+     this is the ui-ux-pro-max "Web3 Bitcoin DeFi" pairing (Space Grotesk
+     + Inter + mono for data), picked because it reads as ledger/terminal
+     precision without tipping into the gimmicky glitch/neon territory the
+     tool's own "Cyberpunk UI" style carries. All three loaded in
      index.html. */
-  --font-display: "Newsreader", "Iowan Old Style", Georgia, serif;
-  --font-sans: "Courier Prime", "Courier New", ui-monospace, monospace;
-  --font-mono: "Courier Prime", "Courier New", ui-monospace, monospace;
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Courier Prime", ui-monospace, monospace;
 
   /* Zero radius everywhere, including buttons -- overriding Tailwind's
      scale directly means every already-written `rounded-lg`/`rounded-xl`/
@@ -204,12 +211,16 @@
 
 @layer base {
   body {
+    /* letter-spacing/line-height were tuned wide (0.03em / 1.9) for
+       Courier Prime, a monospace standing in as body text -- Inter is a
+       normal humanist sans and reads as broken/over-spaced at those
+       values, so both come back down to Inter's own comfortable range. */
     background-color: var(--color-paper);
     color: var(--color-ink);
     font-family: var(--font-sans);
     font-size: 12px;
-    letter-spacing: 0.03em;
-    line-height: 1.9;
+    letter-spacing: 0;
+    line-height: 1.6;
     margin: 0;
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
@@ -341,6 +352,7 @@
   }
 
   .figure {
+    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
 
@@ -468,11 +480,33 @@
     color: var(--color-ink-soft);
   }
 
+  /* ---- Oversized display type (Welcome hero headline) ---- */
+  .hero-title {
+    letter-spacing: -0.04em;
+    line-height: 0.95;
+  }
+
+  /* ---- Cyber accents: restrained, used sparingly (hero CTA, focus
+     rings, the mesh/scan backgrounds) -- not applied blanket, to avoid
+     tipping from "security console" into neon/glitch pastiche. ---- */
+  .glow-accent {
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4), 0 0 24px rgba(56, 189, 248, 0.25);
+  }
+  .text-glow {
+    text-shadow: 0 0 18px rgba(56, 189, 248, 0.45);
+  }
+  .grid-overlay {
+    background-image:
+      linear-gradient(to right, rgba(159, 172, 196, 0.08) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(159, 172, 196, 0.08) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+
   /* ---- Long-form legal-document body copy (Privacy Policy, Terms) ---- */
   .legal-prose {
     color: var(--color-ink-soft);
     font-size: 0.85rem;
-    line-height: 1.9;
+    line-height: 1.7;
   }
   .legal-prose h2 {
     font-family: var(--font-display);
@@ -494,7 +528,7 @@
   .legal-prose li { margin: 0.4rem 0; }
   .legal-prose li::marker { color: var(--color-accent); }
   .legal-prose code {
-    font-family: var(--font-sans);
+    font-family: var(--font-mono);
     font-size: 0.85em;
     border: 1px solid var(--color-hairline);
     padding: 0.1em 0.4em;

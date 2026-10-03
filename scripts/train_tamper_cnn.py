@@ -96,6 +96,11 @@ CASIA2_DIR = os.environ.get("CASIA2_DIR")
 # generate_tamper_training_data.load_sidtd_patches for how to get it.
 SIDTD_DIR = os.environ.get("SIDTD_DIR")
 
+# Fraction of each real dataset withheld from training entirely (CASIA: by
+# image; SIDTD: by whole document type) -- see the split="train"/"test" note
+# at the CASIA2_DIR/SIDTD_DIR loading calls below for why.
+HOLDOUT_FRACTION = 0.2
+
 EPOCHS = 12
 BATCH_SIZE = 32
 LEARNING_RATE = 1e-3
@@ -150,9 +155,17 @@ def main():
     # (see _domain_val_accuracy docstring for how this was actually caught).
     domain = np.zeros(len(patches), dtype=np.int64)
 
+    # split="train" (with HOLDOUT_FRACTION reserved as split="test") keeps a
+    # slice of each real dataset OUT of training entirely, so the dedicated
+    # evaluate_tamper_on_casia.py/evaluate_tamper_on_sidtd.py scripts can
+    # later measure genuinely unseen data -- see _split_files' docstring in
+    # generate_tamper_training_data.py for why this matters: the prior CASIA
+    # "held-out" evaluation used the exact same full image set (same default
+    # seed) as training, so it wasn't actually held out.
     if CASIA2_DIR and Path(CASIA2_DIR).is_dir():
-        print(f"\nBlending in real splice data from {CASIA2_DIR} (using all available images) ...")
-        casia_patches, casia_labels = load_casia_patches(CASIA2_DIR)
+        print(f"\nBlending in real splice data from {CASIA2_DIR} "
+              f"(using {1 - HOLDOUT_FRACTION:.0%} of images; {HOLDOUT_FRACTION:.0%} reserved for held-out eval) ...")
+        casia_patches, casia_labels = load_casia_patches(CASIA2_DIR, split="train", holdout_fraction=HOLDOUT_FRACTION)
         print(f"  {len(casia_patches)} CASIA patches: "
               f"{int((casia_labels==0).sum())} authentic, {int((casia_labels==1).sum())} tampered")
         patches = np.concatenate([patches, casia_patches], axis=0)
@@ -160,8 +173,9 @@ def main():
         domain = np.concatenate([domain, np.ones(len(casia_patches), dtype=np.int64)])
 
     if SIDTD_DIR and Path(SIDTD_DIR).is_dir():
-        print(f"\nBlending in real document forgeries from {SIDTD_DIR} ...")
-        sidtd_patches, sidtd_labels = load_sidtd_patches(SIDTD_DIR)
+        print(f"\nBlending in real document forgeries from {SIDTD_DIR} "
+              f"({HOLDOUT_FRACTION:.0%} of document TYPES reserved, entirely unseen, for held-out eval) ...")
+        sidtd_patches, sidtd_labels = load_sidtd_patches(SIDTD_DIR, split="train", holdout_fraction=HOLDOUT_FRACTION)
         print(f"  {len(sidtd_patches)} SIDTD patches: "
               f"{int((sidtd_labels==0).sum())} authentic, {int((sidtd_labels==1).sum())} tampered")
         patches = np.concatenate([patches, sidtd_patches], axis=0)
