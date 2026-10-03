@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowRight, ArrowUpRight, Shield, User } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Shield, Link2 } from 'lucide-react';
 import { prefersReducedMotion } from '../lib/deviceCapability';
+import { SceneBackground } from '../three/SceneBackground';
 
 // Smooth-scrolls the nav's #argument/#demonstration/etc. anchor jumps using
 // the browser's own native smooth scroll (each target section already
@@ -16,13 +17,18 @@ function smoothScrollTo(hash: string) {
 }
 
 /**
- * Public-facing intro page, built to the warm-paper "maker's landing page"
- * spec (see git history for the design-review discussion and the earlier
- * Neo-Brutalist version this replaces): ground #EFE9DD, ink #141C2B, one
- * accent blue #2C4A8F reserved for type/rules/drawn lines, Newsreader for
- * headings, Courier Prime for everything else, zero radius, no shadows
- * except on a real photograph. Content is grounded in the actual pipeline
- * and KNOWN_LIMITATIONS.md -- see FACTS below -- not invented copy.
+ * Public-facing intro page, redesigned for the blockchain/cybersecurity
+ * SIH theme (see git history for the warm-paper "maker's landing page"
+ * this replaces): ground #0B1120, ink #EDF1F9, one accent cyan #38BDF8
+ * reserved for type/rules/drawn lines, Space Grotesk for headings, Inter
+ * for body, JetBrains Mono for data/figures. The revived MeshNetwork/
+ * SceneBackground WebGL layer (see ../three) stands in for the old
+ * SpreadWordmark-and-photo warm-paper imagery -- a node network reads as
+ * "security/verification mesh," not decoration. Content stays grounded in
+ * the actual pipeline and KNOWN_LIMITATIONS.md -- see FACTS below -- not
+ * invented copy; the one genuinely blockchain-related fact already in the
+ * product (hash-chained audit ledger, anchored to Ethereum Sepolia) is
+ * surfaced more prominently below rather than inventing new claims.
  */
 
 // Every number here is sourced from the codebase, not invented -- the
@@ -196,17 +202,22 @@ const TravelingProduct: React.FC = () => {
   const lerp = (x: number, y: number) => x + (y - x) * lp;
   const x = lerp(a.x, b.x), y = lerp(a.y, b.y), rot = lerp(a.rot, b.rot), scale = lerp(a.scale, b.scale), opacity = lerp(a.opacity, b.opacity);
 
+  // Swapped from the warm-paper spec's "traveling specimen photo" to a
+  // verification HUD chip -- same drift/fade scroll-math, new content: a
+  // hash-chain readout tied to the one real blockchain fact this product
+  // has (see FACTS/MATERIAL's "Audit anchoring... Ethereum Sepolia
+  // testnet" row below), not an invented crypto claim.
   return (
     <div
       aria-hidden="true"
-      className="photo-shadow"
+      className="glow-accent"
       style={{
         position: 'fixed',
         left: `${x}%`,
         top: `${y}%`,
-        width: 'min(30vw, 260px)',
+        width: 'min(26vw, 230px)',
         aspectRatio: '3 / 4',
-        background: 'var(--color-paper)',
+        background: 'var(--color-paper-dim)',
         border: '1px solid var(--color-hairline)',
         transform: `translate(-50%, -50%) rotate(${rot}deg) scale(${scale})`,
         opacity,
@@ -220,29 +231,32 @@ const TravelingProduct: React.FC = () => {
       }}
     >
       <div className="flex items-center justify-between">
-        <Shield className="w-5 h-5 text-ink" strokeWidth={1.5} />
-        <span className="font-sans text-ink-soft" style={{ fontSize: 9, letterSpacing: '0.08em' }}>SPECIMEN</span>
+        <Shield className="w-5 h-5 text-accent" strokeWidth={1.5} />
+        <span className="flex items-center gap-1.5 font-mono text-signal-low" style={{ fontSize: 9, letterSpacing: '0.08em' }}>
+          <span className="w-1.5 h-1.5 rounded-full bg-signal-low animate-pulse" />
+          VERIFIED
+        </span>
       </div>
       {/* Fixed vw/px sizing throughout this row, not percentages -- a
           percentage width nested inside this fixed-position, rotated/
           scaled card reliably resolves to ~0 in Chromium (reproduced with
           flex and grid alike; explicit px/vw is unaffected), so every
           child here is sized the same way the card itself already is. */}
-      <div className="flex items-end" style={{ gap: 10 }}>
-        <div
-          className="flex items-center justify-center shrink-0"
-          style={{ width: 'min(7vw, 60px)', aspectRatio: '3 / 4', border: '1px solid rgba(237, 231, 217, 0.4)' }}
-        >
-          <User className="text-ink-soft" style={{ width: '55%', height: '55%' }} strokeWidth={1.25} />
+      <div className="space-y-1.5">
+        <div className="font-mono text-ink-soft" style={{ fontSize: 9, letterSpacing: '0.04em' }}>
+          0x7f3a9e21&hellip;b4d802c1
         </div>
-        <div className="space-y-1.5">
-          <div style={{ height: 6, background: 'rgba(237, 231, 217, 0.3)', width: 'min(17vw, 130px)' }} />
-          <div style={{ height: 6, background: 'rgba(237, 231, 217, 0.3)', width: 'min(12vw, 95px)' }} />
-          <div style={{ height: 6, background: 'rgba(237, 231, 217, 0.3)', width: 'min(15vw, 112px)' }} />
-          <div style={{ height: 6, background: 'rgba(237, 231, 217, 0.3)', width: 'min(9vw, 70px)' }} />
+        <div style={{ height: 2, background: 'var(--color-hairline)', width: '100%' }}>
+          <div style={{ height: 2, width: '70%', background: 'var(--color-accent)' }} />
+        </div>
+        <div style={{ height: 2, background: 'var(--color-hairline)', width: '82%' }}>
+          <div style={{ height: 2, width: '45%', background: 'var(--color-signal-low)' }} />
         </div>
       </div>
-      <span className="font-sans text-muted" style={{ fontSize: 9, letterSpacing: '0.08em' }}>BM-2026-DEMO</span>
+      <span className="flex items-center gap-1 font-mono text-muted" style={{ fontSize: 9, letterSpacing: '0.08em' }}>
+        <Link2 className="w-2.5 h-2.5" strokeWidth={1.75} />
+        SEPOLIA TESTNET
+      </span>
     </div>
   );
 };
@@ -310,6 +324,7 @@ export const WelcomePage: React.FC = () => {
 
   return (
     <div className="bg-paper text-ink" style={{ fontFamily: 'var(--font-sans)' }}>
+      <SceneBackground />
       <TravelingProduct />
 
       {/* ---------- NAV ---------- */}
@@ -322,16 +337,39 @@ export const WelcomePage: React.FC = () => {
             <a href="#material" onClick={(e) => handleAnchorClick(e, '#material')} className="hover:text-accent transition-colors">Material</a>
             <a href="#measurements" onClick={(e) => handleAnchorClick(e, '#measurements')} className="hover:text-accent transition-colors">Measurements</a>
           </nav>
-          <a href="/" className="btn-primary text-[11px] px-4 py-2">Open Dashboard</a>
+          <div className="flex items-center gap-4">
+            <span className="hidden sm:flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-signal-low">
+              <span className="w-1.5 h-1.5 rounded-full bg-signal-low animate-pulse" />
+              pipeline online
+            </span>
+            <a href="/" className="btn-primary text-[11px] px-4 py-2">Open Dashboard</a>
+          </div>
         </div>
       </header>
 
-      {/* ---------- HERO ---------- */}
-      <section className="relative min-h-screen bg-paper-dim overflow-hidden flex flex-col pt-[58px]">
-        <div className="max-w-[1180px] mx-auto w-full px-6 flex-1 flex flex-col">
+      {/* ---------- HERO ----------
+          Background left transparent (not bg-paper-dim) so the revived
+          mesh-network WebGL layer, mounted above, is the hero's visual
+          centerpiece instead of a flat panel sitting on top of it. */}
+      <section className="relative min-h-screen overflow-hidden flex flex-col pt-[58px]">
+        <div aria-hidden="true" className="grid-overlay pointer-events-none absolute inset-0 opacity-60" />
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-b from-transparent to-[var(--color-paper)]" />
+        {/* Readability scrim: the mesh's connector lines cross straight
+            through the copy column otherwise -- fades paper-solid behind
+            the text, full mesh exposure kept on the right where the HUD
+            chip/network drift freely. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 left-0 w-[58%] md:w-[50%]"
+          style={{ background: 'linear-gradient(to right, var(--color-paper) 0%, var(--color-paper) 40%, transparent 100%)' }}
+        />
+        <div className="relative max-w-[1180px] mx-auto w-full px-6 flex-1 flex flex-col">
           <div className="flex-1 flex flex-col justify-center py-16" style={{ maxWidth: '46vw' }}>
-            <span className="label-eyebrow mb-5">SIH26188 &middot; Smart India Hackathon 2026 &middot; Ministry of Home Affairs</span>
-            <h1 className="font-display text-ink" style={{ fontSize: 'clamp(32px, 4.6vw, 68px)', lineHeight: 1.04 }}>
+            <span className="flex items-center gap-2 label-eyebrow mb-5">
+              <Link2 className="w-3 h-3 text-accent" strokeWidth={2} />
+              SIH26188 &middot; Smart India Hackathon 2026 &middot; Ministry of Home Affairs
+            </span>
+            <h1 className="hero-title font-display text-ink" style={{ fontSize: 'clamp(32px, 4.6vw, 68px)', lineHeight: 1.04 }}>
               Screen documents.<br />Explain every <em>decision</em>.
             </h1>
             <p className="mt-6 text-[13px] text-ink-soft max-w-[52ch]">
@@ -365,6 +403,13 @@ export const WelcomePage: React.FC = () => {
         </div>
       </section>
 
+      {/* The mesh-network background is `position: fixed`, so without an
+          opaque backdrop it would keep bleeding through every section
+          below (confirmed visually -- text contrast against the busy mesh
+          lines dropped badly scrolled past the hero). Everything from here
+          down sits on solid bg-paper; only the hero stays transparent to
+          show the mesh. */}
+      <div className="relative z-10 bg-paper">
       {/* ---------- ARGUMENT ---------- */}
       <section id="argument" className="scroll-mt-[58px] max-w-[1180px] mx-auto px-6 py-24 grid grid-cols-1 md:grid-cols-2 gap-12">
         <Reveal>
@@ -475,6 +520,7 @@ export const WelcomePage: React.FC = () => {
           <SpreadWordmark />
         </div>
       </section>
+      </div>
     </div>
   );
 };

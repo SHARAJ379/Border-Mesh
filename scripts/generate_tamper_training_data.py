@@ -97,6 +97,54 @@ def _splice(base: np.ndarray, donor: np.ndarray, tmp_dir: str) -> Tuple[np.ndarr
     return spliced, (x, y, pw, ph)
 
 
+def _apply_camera_domain_shift(img: np.ndarray, tmp_dir: str) -> np.ndarray:
+    """
+    Degrades a clean, noise-free synthetic render toward real camera-capture
+    statistics -- defocus/motion blur, exposure jitter, sensor noise, and a
+    final JPEG re-compression pass -- simulating the document being printed/
+    displayed and then photographed, the way a real specimen would reach
+    this pipeline. This is the domain-mismatch fix KNOWN_LIMITATIONS.md names
+    as untried after two reverted attempts (undersized model, then a bigger
+    model) both failed to fix a SIDTD-blended retrain's false positives on
+    our own genuine specimens: the model kept learning CASIA/SIDTD's real-
+    photograph sensor/JPEG statistics as if they were part of "tampered",
+    because nothing in our OWN domain's training data had those statistics
+    at all. Giving our own synthetic generator's output the same statistics
+    directly, instead of relying on CASIA/SIDTD to supply them, is the
+    change this function exists to make.
+
+    Every knob is chosen per-call from a range that includes "skip this
+    effect entirely" (sigma/strength 0), and applied independently to each
+    image -- not a single fixed "degraded" look. The model must learn that
+    splice/authenticity is independent of whether capture noise is present,
+    not that noise itself means anything; always degrading (or never
+    degrading) would just teach the opposite shortcut.
+    """
+    out = img.astype(np.float32)
+
+    blur_sigma = random.choice([0.0, 0.0, 0.0, 0.5, 0.8, 1.2, 1.6])
+    if blur_sigma > 0:
+        k = (int(blur_sigma * 4) | 1)  # odd kernel size, >= 1
+        out = cv2.GaussianBlur(out, (k, k), blur_sigma)
+
+    contrast = random.uniform(0.85, 1.15)
+    brightness = random.uniform(-15.0, 15.0)
+    out = out * contrast + brightness
+
+    noise_sigma = random.choice([0.0, 0.0, 2.0, 4.0, 6.0, 9.0])
+    if noise_sigma > 0:
+        out = out + np.random.normal(0.0, noise_sigma, out.shape)
+
+    out = np.clip(out, 0, 255).astype(np.uint8)
+
+    quality = random.choice([55, 65, 75, 85, 92])
+    tmp_path = os.path.join(tmp_dir, f"degrade_{random.randint(0, 1_000_000)}.jpg")
+    cv2.imwrite(tmp_path, out, [cv2.IMWRITE_JPEG_QUALITY, quality])
+    recompressed = cv2.imread(tmp_path)
+    os.remove(tmp_path)
+    return recompressed if recompressed is not None else out
+
+
 def _random_patch(img: np.ndarray, region: Tuple[int, int, int, int] = None) -> np.ndarray:
     """Extracts a PATCH_SIZE x PATCH_SIZE patch, either from a given (x,y,w,h)
     region (jittered within it) or from a random location in the image."""
@@ -134,22 +182,31 @@ def generate_dataset(n_docs: int = 60, patches_per_doc: int = 6, seed: int = 42)
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = [_generate_genuine_doc(tmp_dir) for _ in range(n_docs)]
 
-        # Authentic patches: random locations across genuine documents.
+        # Authentic patches: each clean doc gets its own independent
+        # camera-capture degradation pass (see _apply_camera_domain_shift)
+        # before sampling -- a real genuine specimen reaching this pipeline
+        # was printed/displayed and photographed, not read straight off the
+        # renderer's clean output buffer.
         for doc in docs:
+            degraded_doc = _apply_camera_domain_shift(doc, tmp_dir)
             for _ in range(patches_per_doc):
-                patches.append(_random_patch(doc))
+                patches.append(_random_patch(degraded_doc))
                 labels.append(0)
 
-        # Tampered patches: splice a donor region into a base doc, then sample
-        # patches from inside the spliced region (label 1) and a few from
-        # elsewhere in the same modified doc, which remain genuinely authentic
-        # (label 0) -- this teaches the model the difference is localized, not
-        # "this whole document is suspicious".
+        # Tampered patches: splice a donor region into a base doc AT CLEAN
+        # RESOLUTION first -- preserving the donor patch's own recompression-
+        # mismatch signal from _splice -- then degrade the whole composite
+        # ONCE, as a single final photograph of the already-forged document
+        # would. Patches are then sampled from inside the spliced region
+        # (label 1) and a few from elsewhere in the same modified doc, which
+        # remain genuinely authentic (label 0) -- this teaches the model the
+        # difference is localized, not "this whole document is suspicious".
         for i, base in enumerate(docs):
             donor = docs[(i + 1) % len(docs)]
             spliced_img, region = _splice(base, donor, tmp_dir)
             if region == (0, 0, 0, 0):
                 continue
+            spliced_img = _apply_camera_domain_shift(spliced_img, tmp_dir)
             for _ in range(patches_per_doc):
                 patches.append(_random_patch(spliced_img, region))
                 labels.append(1)
@@ -177,12 +234,41 @@ def _patch_centered_at(img: np.ndarray, cx: int, cy: int) -> np.ndarray:
     return cv2.cvtColor(patch, cv2.COLOR_BGR2RGB)
 
 
+def _split_files(files: list, split: Optional[str], holdout_fraction: float, seed: int) -> list:
+    """
+    Deterministically partitions a file list into disjoint train/test subsets
+    by filename (not by patch), using a dedicated RNG so the split doesn't
+    depend on, or disturb, the global `random`/`np.random` state used
+    elsewhere for patch sampling. `split=None` returns every file unchanged
+    (the original, pre-split behavior).
+
+    This exists because the project's prior CASIA "held-out" evaluation
+    wasn't actually held out: training and evaluation both called
+    load_casia_patches() with the same default seed over the *same full
+    image set*, so most of the "held-out" eval patches were literally in the
+    training set. Training should request split="train" and the final
+    evaluation should request split="test" against the same holdout_fraction
+    and seed, so the two never overlap.
+    """
+    if split is None:
+        return files
+    if split not in ("train", "test"):
+        raise ValueError(f"split must be 'train', 'test', or None, got {split!r}")
+    ordered = sorted(files)
+    rng = random.Random(seed)
+    rng.shuffle(ordered)
+    n_test = int(len(ordered) * holdout_fraction)
+    return ordered[:n_test] if split == "test" else ordered[n_test:]
+
+
 def load_casia_patches(
     casia_root: str,
     n_authentic: Optional[int] = None,
     n_tampered: Optional[int] = None,
     patches_per_image: int = 2,
     seed: int = 42,
+    split: Optional[str] = None,
+    holdout_fraction: float = 0.2,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Samples labeled 64x64 patches from the CASIA v2.0 image tampering
@@ -218,6 +304,8 @@ def load_casia_patches(
 
     au_files = [f for f in au_dir.iterdir() if f.suffix.lower() in (".jpg", ".jpeg", ".bmp")]
     tp_files = [f for f in tp_dir.iterdir() if f.suffix.lower() in (".jpg", ".jpeg", ".tif", ".tiff")]
+    au_files = _split_files(au_files, split, holdout_fraction, seed)
+    tp_files = _split_files(tp_files, split, holdout_fraction, seed)
     random.shuffle(au_files)
     random.shuffle(tp_files)
     if n_authentic is not None:
@@ -264,6 +352,8 @@ def load_sidtd_patches(
     patches_per_fake: int = 4,
     elsewhere_per_fake: int = 2,
     seed: int = 42,
+    split: Optional[str] = None,
+    holdout_fraction: float = 0.2,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Samples labeled 64x64 patches from the SIDTD dataset (Synthetic dataset
@@ -309,12 +399,25 @@ def load_sidtd_patches(
     reals_dir, fakes_dir = root / "Images" / "reals", root / "Images" / "fakes"
     reals_ann_dir, fakes_ann_dir = root / "Annotations" / "reals", root / "Annotations" / "fakes"
 
+    # Split at the DOCUMENT-TYPE level (e.g. "alb_id"), not the individual-
+    # file level: all ~100 "reals" of one doctype share the same fixed
+    # template design (layout/background), varying only in the overlaid
+    # field values -- a file-level split would let the model train on that
+    # exact template and then be "tested" on another instance of the same
+    # template, which isn't a genuinely unseen case. Holding out whole
+    # doctypes means the test set contains template designs the model never
+    # saw in any form during training.
+    _real_re = re.compile(r'^(.+)_\d+\.jpg$')
+    _fake_re = re.compile(r'^(.+)_\d+_fake_.*\.jpg$')
+    all_doctypes = sorted({m.group(1) for f in reals_dir.glob("*.jpg") for m in [_real_re.match(f.name)] if m})
+    allowed_doctypes = set(_split_files(all_doctypes, split, holdout_fraction, seed))
+
     doctype_annotations: dict = {}
 
     def _doctype_annotation(doctype: str) -> Optional[dict]:
         if doctype not in doctype_annotations:
             path = reals_ann_dir / f"{doctype}.json"
-            doctype_annotations[doctype] = json.loads(path.read_text()) if path.exists() else None
+            doctype_annotations[doctype] = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
         return doctype_annotations[doctype]
 
     def _field_bbox(src_filename: str, field: str) -> Optional[Tuple[int, int, int, int]]:
@@ -339,6 +442,10 @@ def load_sidtd_patches(
     labels: List[int] = []
 
     for f in sorted(reals_dir.glob("*.jpg")):
+        if split is not None:
+            m = _real_re.match(f.name)
+            if not m or m.group(1) not in allowed_doctypes:
+                continue
         img = cv2.imread(str(f))
         if img is None:
             continue
@@ -348,10 +455,14 @@ def load_sidtd_patches(
 
     resolved, unresolved = 0, 0
     for f in sorted(fakes_dir.glob("*.jpg")):
+        if split is not None:
+            m = _fake_re.match(f.name)
+            if not m or m.group(1) not in allowed_doctypes:
+                continue
         ann_path = fakes_ann_dir / f"{f.stem}.json"
         if not ann_path.exists():
             continue
-        meta = json.loads(ann_path.read_text())
+        meta = json.loads(ann_path.read_text(encoding="utf-8"))
         img = cv2.imread(str(f))
         if img is None:
             continue

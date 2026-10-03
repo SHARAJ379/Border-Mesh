@@ -108,6 +108,9 @@ The Risk Engine synthesizes all forensic signals into an explainable 0–100 sco
 ### Critical-Signal Floor
 A weighted average alone can let a definitive rule violation — an expired document, a watchlist hit, a high-confidence forgery finding — get diluted by unrelated clean signals (a clean face match doesn't make an expired passport valid for travel). Any `CRITICAL`-severity signal floors the outcome at **HIGH** regardless of the weighted score; the response includes `critical_floor_applied` so this is auditable, not silent.
 
+### Face-Identity-Mismatch Floor
+The converse gap existed until a live test surfaced it: pairing a GENUINE, untampered document with a live capture of a different real person produced a correctly-flagged `REVIEW_REQUIRED` (similarity below the 72% 1:1 threshold), but the overall case could still total as little as ~18–23/100 — LOW RISK, "CLEAR FOR ENTRY" — because `REVIEW_REQUIRED`'s raw-risk floor of 60 at the face module's 30% weight contributes only 18 points, and a clean, untampered document supplies no other signal to escalate it. A clean document doesn't make an unverified identity acceptable, the same way a clean face match doesn't make an expired passport valid. Any `REVIEW_REQUIRED` 1:1 face verdict (document-vs-live-capture, calibrated at 98.0% accuracy / 0.60% false-accept rate on LFW — not the cross-case 1:N gallery match, which deliberately stays uncapped due to its own measured 26% false-accept rate at gallery scale) now floors the outcome at **HIGH** the same way a `CRITICAL` signal does; the response includes `face_mismatch_floor_applied`. `NO_FACE_DETECTED`/`MULTIPLE_FACES` are left out of this floor — their raw-risk value of 85 already clears LOW on its own, and unlike `REVIEW_REQUIRED` they aren't necessarily an affirmative mismatch finding (could be a capture/quality failure instead).
+
 ---
 
 ## 5. Technology Stack

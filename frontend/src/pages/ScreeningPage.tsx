@@ -13,12 +13,8 @@ import {
   Sparkles,
   AlertTriangle,
   CheckCircle2,
-  ShieldAlert,
-  Layers,
   X,
-  RefreshCw,
   Video,
-  SlidersHorizontal,
   Flame
 } from 'lucide-react';
 
@@ -347,11 +343,14 @@ export const ScreeningPage: React.FC<ScreeningPageProps> = ({ onScreeningComplet
           <SectionHeading level="h3" title="Document specimen" icon={<FileText className="w-4 h-4 text-accent" strokeWidth={1.75} />} />
 
           <input
+            id="document_specimen_file"
+            name="document_specimen_file"
             type="file"
             ref={fileInputRef}
             onChange={handleDocChange}
             accept="image/jpeg,image/png,image/jpg"
             className="hidden"
+            aria-label="Document specimen file upload"
             data-testid="doc-file-input"
           />
 
@@ -402,10 +401,12 @@ export const ScreeningPage: React.FC<ScreeningPageProps> = ({ onScreeningComplet
           {/* Document metadata */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label-eyebrow block mb-1.5">
+              <label className="label-eyebrow block mb-1.5" htmlFor="document_type">
                 Document type
               </label>
               <select
+                id="document_type"
+                name="document_type"
                 value={documentType}
                 onChange={(e) => setDocumentType(e.target.value)}
                 className="field w-full cursor-pointer"
@@ -419,10 +420,12 @@ export const ScreeningPage: React.FC<ScreeningPageProps> = ({ onScreeningComplet
             </div>
 
             <div>
-              <label className="label-eyebrow block mb-1.5">
+              <label className="label-eyebrow block mb-1.5" htmlFor="issuing_jurisdiction">
                 Issuing jurisdiction
               </label>
               <select
+                id="issuing_jurisdiction"
+                name="issuing_jurisdiction"
                 value={country}
                 onChange={(e) => setCountry(e.target.value)}
                 className="field w-full cursor-pointer"
@@ -452,11 +455,14 @@ export const ScreeningPage: React.FC<ScreeningPageProps> = ({ onScreeningComplet
           />
 
           <input
+            id="live_face_file"
+            name="live_face_file"
             type="file"
             ref={faceInputRef}
             onChange={handleFaceChange}
             accept="image/jpeg,image/png,image/jpg"
             className="hidden"
+            aria-label="Live traveler face capture file upload"
           />
 
           {/* In-browser webcam viewport, if active -- a real live photo, so

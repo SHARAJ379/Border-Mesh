@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
 import { PrivacyNotice } from './components/PrivacyNotice';
+import { SceneBackground } from './three/SceneBackground';
 import { useLenis } from './lib/useLenis';
 import { ScrollerContext } from './lib/ScrollerContext';
 import { DashboardPage } from './pages/DashboardPage';
@@ -15,10 +16,15 @@ import { CaseDetailPage } from './pages/CaseDetailPage';
 import { ChangeDetectionPage } from './pages/ChangeDetectionPage';
 import { ComplianceDashboardPage } from './pages/ComplianceDashboardPage';
 
-// The ambient WebGL dot-mesh background (see git history's SceneBackground)
-// was a dark-theme device -- ink-on-paper has no equivalent "glowing mesh
-// behind glass panels" moment, so this redesign drops it rather than
-// re-hueing a shader built for a dark ground.
+// The ambient WebGL dot-mesh background (see SceneBackground/MeshNetwork)
+// was dropped for the warm-paper redesign -- ink-on-paper had no
+// equivalent "glowing mesh behind glass panels" moment. The
+// blockchain/cybersecurity redesign brings it back, recolored to the new
+// accent: a sparse node network drifting behind the sidebar/content is
+// exactly the "security/verification mesh" motif this redesign wants, not
+// a bolted-on effect. Sidebar/Navbar/panels sit on bg-paper (opaque), so
+// the mesh only shows through in the gaps -- scrollable content panes --
+// same restraint as before, now with the right ground to sit on.
 
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
@@ -46,6 +52,8 @@ export const App: React.FC = () => {
 
   return (
     <div className="relative flex h-screen bg-paper text-ink overflow-hidden font-sans">
+      <SceneBackground />
+
       {/* Sidebar */}
       <Sidebar
         currentTab={currentTab}

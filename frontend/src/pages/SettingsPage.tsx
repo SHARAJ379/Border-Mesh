@@ -124,13 +124,15 @@ export const SettingsPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
             {weightFields.map((field) => (
               <div key={field.key} className="rule-row flex-col items-stretch gap-1">
-                <label className="text-ink-soft flex items-center justify-between text-[12px]">
+                <label className="text-ink-soft flex items-center justify-between text-[12px]" htmlFor={`weight_${field.key}`}>
                   <span>{field.label}</span>
                   <span className="figure text-accent font-bold">
                     {weights[field.key as keyof typeof weights]}%
                   </span>
                 </label>
                 <input
+                  id={`weight_${field.key}`}
+                  name={`weight_${field.key}`}
                   type="range"
                   min="0"
                   max={field.max}
@@ -141,11 +143,13 @@ export const SettingsPage: React.FC = () => {
               </div>
             ))}
             <div className="sm:col-span-2 rule-row flex-col items-stretch gap-1">
-              <label className="text-ink-soft flex items-center justify-between text-[12px]">
+              <label className="text-ink-soft flex items-center justify-between text-[12px]" htmlFor="weight_watchlist">
                 <span>Simulated watchlist adapter (demo sandboxed)</span>
                 <span className="figure text-accent font-bold">{weights.watchlist}%</span>
               </label>
               <input
+                id="weight_watchlist"
+                name="weight_watchlist"
                 type="range"
                 min="0"
                 max={20}

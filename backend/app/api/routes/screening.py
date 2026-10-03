@@ -506,6 +506,7 @@ def process_risk_aggregation(case_id: str, db: Session = Depends(get_db), _offic
         "risk_level": case.risk_level,
         "recommendation": case.recommendation,
         "critical_floor_applied": risk_res.get("critical_floor_applied", False),
+        "face_mismatch_floor_applied": risk_res.get("face_mismatch_floor_applied", False),
         "breakdown": risk_res["breakdown"],
         "checks": risk_res["checks"],
         "elapsed_ms": round(elapsed_ms, 1)

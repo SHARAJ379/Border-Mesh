@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Info, X } from 'lucide-react';
+import { ShieldCheck, X } from 'lucide-react';
 
 export const PrivacyNotice: React.FC = () => {
   const [dismissed, setDismissed] = useState(false);

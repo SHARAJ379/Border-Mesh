@@ -106,6 +106,76 @@ def test_risk_engine_isolated_critical_signal_floors_to_high():
     assert result["risk_score"] > 49.0
 
 
+def test_risk_engine_isolated_face_mismatch_floors_to_high():
+    """
+    Regression guard for a real gap found by exercising the manual upload
+    flow end-to-end: pairing a GENUINE, untampered document specimen with a
+    live capture of a different real person (demo-data/samples/sample_live_
+    face_mismatch.jpg) produced a 61% similarity REVIEW_REQUIRED verdict --
+    correctly flagged by face_service.py -- but the overall case still came
+    back LOW RISK / "CLEAR FOR ENTRY", because REVIEW_REQUIRED's raw-risk
+    floor of 60 at the 30% face weight contributes only 18 points, below
+    threshold_low, when nothing else in the document is wrong.
+
+    A confirmed 1:1 biometric mismatch against the document photo is this
+    system's most direct anti-impersonation finding (calibrated at 98.0%
+    accuracy / 0.60% false-accept rate on LFW -- see face_service.py) and
+    must never be diluted below HIGH by an otherwise-clean, untampered
+    document, mirroring the existing CRITICAL-signal floor's rationale.
+    """
+    engine = RiskEngine()
+    validation_data = {"passed_count": 5, "failed_count": 0, "checks": []}
+    tamper_data = {"tamper_risk": 0.08, "checks": []}
+    face_data = {
+        "similarity": 0.61,
+        "status": "REVIEW_REQUIRED",
+        "checks": [
+            {"id": "FACE_BIOMETRIC_MATCH", "category": "FACE", "factor": "FACE", "label": "Biometric Face Mismatch",
+             "status": "FAIL", "severity": "HIGH", "confidence": 0.39, "score_impact": 25.0,
+             "explanation": "Face mismatch.", "evidence": None},
+        ]
+    }
+
+    result = engine.calculate(
+        mrz_data={"is_valid": True},
+        validation_data=validation_data,
+        tamper_data=tamper_data,
+        face_data=face_data,
+        watchlist_match=None
+    )
+
+    assert result["face_mismatch_floor_applied"] is True
+    assert result["critical_floor_applied"] is False
+    assert result["risk_level"] in ("HIGH", "CRITICAL")
+    assert result["risk_score"] > 49.0
+
+    floor_entry = next(b for b in result["breakdown"] if b["factor"] == "Face Identity Mismatch Floor")
+    assert floor_entry["weight"] is None
+    assert floor_entry["raw_risk"] is None
+    reconciled_total = round(sum(b["weighted_contribution"] for b in result["breakdown"]), 1)
+    assert reconciled_total == result["risk_score"]
+
+
+def test_risk_engine_no_face_mismatch_floor_when_similarity_matches():
+    """A genuine MATCH must never trip the new face-mismatch floor."""
+    engine = RiskEngine()
+    validation_data = {"passed_count": 5, "failed_count": 0, "checks": []}
+    tamper_data = {"tamper_risk": 0.08, "checks": []}
+    face_data = {"similarity": 0.92, "status": "MATCH", "checks": []}
+
+    result = engine.calculate(
+        mrz_data={"is_valid": True},
+        validation_data=validation_data,
+        tamper_data=tamper_data,
+        face_data=face_data,
+        watchlist_match=None
+    )
+
+    assert result["face_mismatch_floor_applied"] is False
+    assert result["risk_level"] == "LOW"
+    assert all(b["factor"] != "Face Identity Mismatch Floor" for b in result["breakdown"])
+
+
 def test_risk_engine_breakdown_reconciles_to_total_when_critical_floor_applies():
     """
     Reproduces a real credibility gap in the "Explainable risk breakdown"

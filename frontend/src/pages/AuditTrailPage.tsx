@@ -244,7 +244,10 @@ export const AuditTrailPage: React.FC<AuditTrailPageProps> = ({ onSelectCase }) 
         <div className="relative w-full sm:w-64 pb-3 sm:pb-0">
           <Search className="w-3.5 h-3.5 text-muted absolute left-1 top-1/2 -translate-y-1/2" strokeWidth={1.75} />
           <input
+            id="audit_search"
+            name="audit_search"
             type="text"
+            aria-label="Search audit log by action, actor, or hash"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search action, actor, hash…"

@@ -48,6 +48,10 @@ demo_output/
 # Windows path (including the local username) to launch the aletheore MCP
 # server, which has no business being committed to a public repo.
 .mcp.json
+
+# Local Claude Code tooling (skill bundles, local settings, scheduler lock)
+# -- machine-local, not project source.
+.claude/
 .codex/config.toml
 .cursor/mcp.json
 .kiro/settings/mcp.json

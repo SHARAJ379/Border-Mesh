@@ -42,6 +42,9 @@ export const QuickDemoBar: React.FC<QuickDemoBarProps> = ({ onScenarioLoaded }) 
       <span className="text-muted shrink-0 uppercase tracking-[0.06em]">Demo scenario:</span>
 
       <select
+        id="demo_scenario"
+        name="demo_scenario"
+        aria-label="Demo scenario"
         value={selectedScenario}
         onChange={(e) => setSelectedScenario(e.target.value)}
         disabled={loading}

@@ -3,7 +3,7 @@ import { CaseItem } from '../types';
 import { api } from '../services/api';
 import { RiskBadge } from '../components/RiskBadge';
 import { ScrollShadowX } from '../components/ScrollShadowX';
-import { FileText, Search, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
+import { FileText, Search, ChevronRight, RefreshCw } from 'lucide-react';
 import { SectionHeading } from '../components/SectionHeading';
 import { ScrollReveal } from '../components/ScrollReveal';
 
@@ -81,7 +81,10 @@ export const CasesListPage: React.FC<CasesListPageProps> = ({ onSelectCase }) =>
           <div className="relative flex-1 sm:w-64">
             <Search className="w-3.5 h-3.5 text-muted absolute left-1 top-1/2 -translate-y-1/2" strokeWidth={1.75} />
             <input
+              id="cases_search"
+              name="cases_search"
               type="text"
+              aria-label="Search by case ID or country"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search Case ID or Country…"

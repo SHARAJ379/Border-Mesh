@@ -11,6 +11,24 @@ class LightweightForensicCNN(nn.Module):
     """
     Lightweight convolutional neural network for patch-level forensic texture classification.
     Distinguishes authentic document background textures from spliced/tampered patches.
+
+    NOTE (2026-10-01): a ~250k-parameter, 4-conv-layer version of this class
+    was tried, to address the documented root cause of why blending SIDTD's
+    real document forgeries into training (four prior attempts, see
+    KNOWN_LIMITATIONS.md) always produced a confident false positive on this
+    project's own genuine specimens -- the old model was suspected too small
+    to absorb SIDTD's signal without overfitting onto spurious correlations.
+    It was REVERTED: the bigger model's own sanity check (fresh genuine
+    specimens, scripts/train_tamper_cnn.py) still scored a confident 0.94
+    mean tamper_risk, no better than the smaller model's prior failures,
+    despite genuinely better held-out accuracy on CASIA/SIDTD themselves
+    (SIDTD recall 32%->89%). Model capacity was not the root cause -- the
+    model, regardless of size, keeps learning real-photograph statistics
+    (CASIA/SIDTD are both camera photos) that conflict with this project's
+    clean, noise-free synthetic document renders. Don't re-attempt a bigger
+    model as the fix without addressing that domain mismatch directly (e.g.
+    photographing/degrading the project's own synthetic specimens before
+    training, not just reweighting domain sampling as already tried).
     """
     def __init__(self):
         super(LightweightForensicCNN, self).__init__()
@@ -19,7 +37,7 @@ class LightweightForensicCNN(nn.Module):
             nn.BatchNorm2d(16),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(2, 2), # 64 -> 32
-            
+
             nn.Conv2d(16, 32, kernel_size=3, padding=1),
             nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),

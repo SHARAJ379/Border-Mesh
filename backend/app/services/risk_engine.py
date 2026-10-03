@@ -316,6 +316,35 @@ class RiskEngine:
             total_risk = self.threshold_medium + 0.1
             critical_floor_applied = True
 
+        # Same hard-stop reasoning, for the converse case: a REVIEW_REQUIRED
+        # face verdict is the 1:1 face module's own affirmative finding that
+        # the live subject is NOT the person in the document photo -- not a
+        # probabilistic/corroborating signal the way the cross-case 1:N
+        # gallery match is (that one stays an uncapped, non-flooring HIGH
+        # contribution on purpose -- see IdentityGalleryService's own
+        # disclosure of its measured 26% false-accept rate at gallery scale).
+        # This is the system's single most direct anti-impersonation check,
+        # calibrated against the LFW 1:1 benchmark at 98.0% accuracy / 0.60%
+        # false-accept rate (face_service.py), and REVIEW_REQUIRED's raw-risk
+        # floor of 60 (set deliberately low to avoid over-penalizing a
+        # borderline similarity score) combined with the 30% face weight
+        # could previously total as little as 18 points -- below
+        # threshold_low, so a confirmed biometric mismatch against an
+        # otherwise-clean, UNTAMPERED document (e.g. someone presenting
+        # another person's genuine passport) could classify LOW RISK / "CLEAR
+        # FOR ENTRY". A clean document doesn't make an unverified identity
+        # acceptable, same as a clean face match doesn't make an expired
+        # passport valid. NO_FACE_DETECTED/MULTIPLE_FACES aren't included
+        # here: their raw-risk floor of 85 already clears threshold_low on
+        # its own, and unlike REVIEW_REQUIRED they aren't necessarily an
+        # affirmative mismatch finding (could just be a capture/quality
+        # failure), so they're left to the ordinary weighted score instead of
+        # a hard floor.
+        face_mismatch_floor_applied = False
+        if face_data and face_data.get("status") == "REVIEW_REQUIRED" and total_risk <= self.threshold_medium:
+            total_risk = self.threshold_medium + 0.1
+            face_mismatch_floor_applied = True
+
         # Risk Tier Classification
         if total_risk <= self.threshold_low:
             risk_level = "LOW"
@@ -387,12 +416,25 @@ class RiskEngine:
                 "raw_risk": None,
                 "weighted_contribution": round(total_risk - pre_floor_total, 1),
             })
+        elif face_mismatch_floor_applied:
+            # Same reconciliation purpose as the Critical Signal Floor line
+            # above, kept as its own distinct, honestly-labeled entry rather
+            # than folded into that one -- an officer reading the breakdown
+            # should see this floored because of a confirmed face mismatch,
+            # not an expired document or a watchlist hit.
+            breakdown.append({
+                "factor": "Face Identity Mismatch Floor",
+                "weight": None,
+                "raw_risk": None,
+                "weighted_contribution": round(total_risk - pre_floor_total, 1),
+            })
 
         return {
             "risk_score": total_risk,
             "risk_level": risk_level,
             "recommendation": recommendation,
             "critical_floor_applied": critical_floor_applied,
+            "face_mismatch_floor_applied": face_mismatch_floor_applied,
             "breakdown": breakdown,
             "checks": all_checks,
         }

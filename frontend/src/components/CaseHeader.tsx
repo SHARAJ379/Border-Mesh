@@ -162,10 +162,12 @@ export const CaseHeader: React.FC<CaseHeaderProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label className="label-eyebrow block mb-1.5">
+            <label className="label-eyebrow block mb-1.5" htmlFor="officer_decision">
               Officer Action
             </label>
             <select
+              id="officer_decision"
+              name="officer_decision"
               value={decision}
               onChange={(e) => setDecision(e.target.value as OfficerDecision)}
               className="field w-full cursor-pointer"
@@ -182,11 +184,13 @@ export const CaseHeader: React.FC<CaseHeaderProps> = ({
           </div>
 
           <div className="sm:col-span-2">
-            <label className="label-eyebrow block mb-1.5">
+            <label className="label-eyebrow block mb-1.5" htmlFor="officer_notes">
               Inspection Notes / Justification
             </label>
             <div className="flex gap-3">
               <input
+                id="officer_notes"
+                name="officer_notes"
                 type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}

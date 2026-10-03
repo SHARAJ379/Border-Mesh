@@ -4,11 +4,12 @@ import * as THREE from 'three';
 import { useSyncExternalStore } from 'react';
 import { scrollProgressStore } from '../lib/scrollProgress';
 
-// Brass (primary accent) and teal (secondary, used sparingly) -- matches
-// the --color-brass-400 / --color-teal-400 tokens in index.css so the 3D
-// layer reads as part of the same system, not a bolted-on effect.
-const BRASS = new THREE.Color('#D3AE5E');
-const TEAL = new THREE.Color('#5C948C');
+// Accent cyan (primary) and signal green (secondary, used sparingly) --
+// matches --color-accent / --color-signal-low in index.css so the 3D layer
+// reads as part of the blockchain/cybersecurity system, not a bolted-on
+// effect. Recolored from the warm-paper system's brass/teal.
+const ACCENT = new THREE.Color('#38BDF8');
+const SIGNAL = new THREE.Color('#4ADE80');
 
 interface MeshNetworkProps {
   nodeCount: number;
@@ -47,7 +48,7 @@ export function MeshNetwork({ nodeCount }: MeshNetworkProps) {
       points.push(p);
       positions.set([p.x, p.y, p.z], i * 3);
 
-      const color = Math.random() > 0.75 ? TEAL : BRASS;
+      const color = Math.random() > 0.75 ? SIGNAL : ACCENT;
       colors.set([color.r, color.g, color.b], i * 3);
     }
 
@@ -98,7 +99,7 @@ export function MeshNetwork({ nodeCount }: MeshNetworkProps) {
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" args={[linePositions, 3]} />
         </bufferGeometry>
-        <lineBasicMaterial color="#8C6D2E" transparent opacity={0.18} />
+        <lineBasicMaterial color="#38BDF8" transparent opacity={0.18} />
       </lineSegments>
     </group>
   );
