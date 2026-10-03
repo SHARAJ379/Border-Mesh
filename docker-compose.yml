@@ -27,7 +27,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/bordermesh
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/bordermesh
       - ENVIRONMENT=development
       - DEMO_MODE=true
       - SECRET_KEY=bordermesh-sih2026-demo-secret-key-change-in-production
