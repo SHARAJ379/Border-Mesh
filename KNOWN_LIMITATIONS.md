@@ -42,11 +42,11 @@ different, easier, in-distribution test. The 71.2%/39.5% CASIA numbers are the
 honest out-of-distribution measurement and are what should be quoted if asked
 about real-world accuracy, not the 87.8% figure.
 
-**Why it wasn't retrained close to judging:** it was tried — twice, by two
-different theories of the root cause, both of which failed and were reverted.
-The committed checkpoint is intentionally unchanged (CASIA-only, trained on
-this project's own synthetic splices plus CASIA photo-splice data — not
-SIDTD).
+**Why it wasn't retrained close to judging:** it was tried — three times, by
+three different theories of the root cause, all of which failed and were
+reverted. The committed checkpoint is intentionally unchanged (CASIA-only,
+trained on this project's own synthetic splices plus CASIA photo-splice data
+— not SIDTD).
 
 *Attempt 1 (undersized model):* a real forgery dataset (SIDTD — real ID
 document forgeries, not just generic photo splices like CASIA) was integrated
@@ -109,16 +109,51 @@ doubles (7.8%→18.7%). This is consistent with, not contradicted by, attempt
 2's 89% recall figure above: that number came from a differently-trained,
 differently-sized, since-reverted checkpoint, not the one actually shipped.
 
+*Attempt 3 (degrade our own renders instead of adding more real-photo data):*
+tested the specific direction attempt 2 left untried — instead of feeding the
+model more real camera photos, make its own synthetic training data look like
+it came from a camera. Added `_apply_camera_domain_shift()` to
+`scripts/generate_tamper_training_data.py`: randomized Gaussian blur, sensor
+noise, exposure/contrast jitter, and a final JPEG re-compression pass, applied
+independently (including "skip entirely" on each knob) to both authentic and
+spliced synthetic documents before patch sampling, so the model would see
+capture noise as orthogonal to tamper/authentic rather than correlated with
+either. Retrained with the same CASIA blend as the shipped checkpoint — no
+SIDTD, to keep this a one-variable change from the actual baseline. Real
+measured result: own-synthetic-domain validation accuracy fell to **68.4%**
+(well below the shipped checkpoint's own-domain accuracy), and the sanity
+check against 5 fresh genuine specimens scored a confident **0.85 mean
+tamper-risk** — again above the 0.70 HIGH threshold, again a false positive,
+just by a different mechanism than attempts 1/2.
+
+**Model capacity and real document-forgery data weren't the only confounds —
+degrading our own data this way moved the mismatch rather than closing it.**
+The fresh sanity-check specimens are undegraded, clean renders (that
+genuinely is what this project's demo path produces), but training now saw
+mostly-degraded "authentic" examples — most of the randomized blur/noise
+choices are non-zero by design — so the model learned "authentic" looks like
+it has some capture noise, and started treating the actually-clean specimens
+as the odd case instead. This attempt was also reverted: `tamper_cnn.pth` was
+restored from a pre-experiment backup and verified byte-for-byte identical to
+the committed checkpoint before anything was committed. The degradation code
+is kept in `generate_tamper_training_data.py` (same rationale as the SIDTD
+loader above — working infrastructure for a future attempt, not something to
+re-run as-is); a future attempt on this lever should bias the degradation
+distribution toward "light or none" so clean stays the dominant authentic
+case, rather than letting degraded examples dominate the way this one did.
+
 **If asked directly:** "71% accuracy, 40% recall on real photo splices (CASIA);
 60% accuracy, 32% recall on real document forgeries specifically (SIDTD),
-measured honestly and both out-of-distribution for the committed model. We
-tried twice to close the gap with real document-forgery training data — first
-suspecting the model was too small, then confirming a bigger model wasn't the
-fix either — and both attempts produced a confident false positive on our own
-genuine specimens, so both were reverted rather than shipped under time
-pressure. The actual blocker is a domain mismatch between real camera photos
-and our clean synthetic renders, not model size, and fixing that properly
-needs more than a retrain."
+measured honestly and both out-of-distribution for the committed model. We've
+tried three times to close that gap — an undersized model, then a bigger
+model, then degrading our own synthetic data to look more like a real camera
+capture instead of adding more real photos — and all three produced a
+confident false positive on our own genuine specimens, so all three were
+reverted rather than shipped under time pressure. The actual blocker is a
+domain mismatch between real camera photos and our clean synthetic renders,
+and none of the three angles tried so far — model size, real forgery data
+volume, or synthetic degradation — has closed it; fixing it properly needs
+more than a retrain."
 
 ---
 

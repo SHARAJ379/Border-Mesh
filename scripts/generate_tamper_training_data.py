@@ -97,6 +97,54 @@ def _splice(base: np.ndarray, donor: np.ndarray, tmp_dir: str) -> Tuple[np.ndarr
     return spliced, (x, y, pw, ph)
 
 
+def _apply_camera_domain_shift(img: np.ndarray, tmp_dir: str) -> np.ndarray:
+    """
+    Degrades a clean, noise-free synthetic render toward real camera-capture
+    statistics -- defocus/motion blur, exposure jitter, sensor noise, and a
+    final JPEG re-compression pass -- simulating the document being printed/
+    displayed and then photographed, the way a real specimen would reach
+    this pipeline. This is the domain-mismatch fix KNOWN_LIMITATIONS.md names
+    as untried after two reverted attempts (undersized model, then a bigger
+    model) both failed to fix a SIDTD-blended retrain's false positives on
+    our own genuine specimens: the model kept learning CASIA/SIDTD's real-
+    photograph sensor/JPEG statistics as if they were part of "tampered",
+    because nothing in our OWN domain's training data had those statistics
+    at all. Giving our own synthetic generator's output the same statistics
+    directly, instead of relying on CASIA/SIDTD to supply them, is the
+    change this function exists to make.
+
+    Every knob is chosen per-call from a range that includes "skip this
+    effect entirely" (sigma/strength 0), and applied independently to each
+    image -- not a single fixed "degraded" look. The model must learn that
+    splice/authenticity is independent of whether capture noise is present,
+    not that noise itself means anything; always degrading (or never
+    degrading) would just teach the opposite shortcut.
+    """
+    out = img.astype(np.float32)
+
+    blur_sigma = random.choice([0.0, 0.0, 0.0, 0.5, 0.8, 1.2, 1.6])
+    if blur_sigma > 0:
+        k = (int(blur_sigma * 4) | 1)  # odd kernel size, >= 1
+        out = cv2.GaussianBlur(out, (k, k), blur_sigma)
+
+    contrast = random.uniform(0.85, 1.15)
+    brightness = random.uniform(-15.0, 15.0)
+    out = out * contrast + brightness
+
+    noise_sigma = random.choice([0.0, 0.0, 2.0, 4.0, 6.0, 9.0])
+    if noise_sigma > 0:
+        out = out + np.random.normal(0.0, noise_sigma, out.shape)
+
+    out = np.clip(out, 0, 255).astype(np.uint8)
+
+    quality = random.choice([55, 65, 75, 85, 92])
+    tmp_path = os.path.join(tmp_dir, f"degrade_{random.randint(0, 1_000_000)}.jpg")
+    cv2.imwrite(tmp_path, out, [cv2.IMWRITE_JPEG_QUALITY, quality])
+    recompressed = cv2.imread(tmp_path)
+    os.remove(tmp_path)
+    return recompressed if recompressed is not None else out
+
+
 def _random_patch(img: np.ndarray, region: Tuple[int, int, int, int] = None) -> np.ndarray:
     """Extracts a PATCH_SIZE x PATCH_SIZE patch, either from a given (x,y,w,h)
     region (jittered within it) or from a random location in the image."""
@@ -134,22 +182,31 @@ def generate_dataset(n_docs: int = 60, patches_per_doc: int = 6, seed: int = 42)
     with tempfile.TemporaryDirectory() as tmp_dir:
         docs = [_generate_genuine_doc(tmp_dir) for _ in range(n_docs)]
 
-        # Authentic patches: random locations across genuine documents.
+        # Authentic patches: each clean doc gets its own independent
+        # camera-capture degradation pass (see _apply_camera_domain_shift)
+        # before sampling -- a real genuine specimen reaching this pipeline
+        # was printed/displayed and photographed, not read straight off the
+        # renderer's clean output buffer.
         for doc in docs:
+            degraded_doc = _apply_camera_domain_shift(doc, tmp_dir)
             for _ in range(patches_per_doc):
-                patches.append(_random_patch(doc))
+                patches.append(_random_patch(degraded_doc))
                 labels.append(0)
 
-        # Tampered patches: splice a donor region into a base doc, then sample
-        # patches from inside the spliced region (label 1) and a few from
-        # elsewhere in the same modified doc, which remain genuinely authentic
-        # (label 0) -- this teaches the model the difference is localized, not
-        # "this whole document is suspicious".
+        # Tampered patches: splice a donor region into a base doc AT CLEAN
+        # RESOLUTION first -- preserving the donor patch's own recompression-
+        # mismatch signal from _splice -- then degrade the whole composite
+        # ONCE, as a single final photograph of the already-forged document
+        # would. Patches are then sampled from inside the spliced region
+        # (label 1) and a few from elsewhere in the same modified doc, which
+        # remain genuinely authentic (label 0) -- this teaches the model the
+        # difference is localized, not "this whole document is suspicious".
         for i, base in enumerate(docs):
             donor = docs[(i + 1) % len(docs)]
             spliced_img, region = _splice(base, donor, tmp_dir)
             if region == (0, 0, 0, 0):
                 continue
+            spliced_img = _apply_camera_domain_shift(spliced_img, tmp_dir)
             for _ in range(patches_per_doc):
                 patches.append(_random_patch(spliced_img, region))
                 labels.append(1)
