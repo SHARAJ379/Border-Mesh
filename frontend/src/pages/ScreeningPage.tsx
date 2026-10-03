@@ -13,12 +13,8 @@ import {
   Sparkles,
   AlertTriangle,
   CheckCircle2,
-  ShieldAlert,
-  Layers,
   X,
-  RefreshCw,
   Video,
-  SlidersHorizontal,
   Flame
 } from 'lucide-react';
 

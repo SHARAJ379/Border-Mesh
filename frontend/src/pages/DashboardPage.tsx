@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { DashboardStats, CaseItem } from '../types';
+import { DashboardStats } from '../types';
 import { api } from '../services/api';
 import { RiskBadge } from '../components/RiskBadge';
 import { ScrollShadowX } from '../components/ScrollShadowX';

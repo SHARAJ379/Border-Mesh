@@ -24,8 +24,7 @@ import {
   Flame,
   ScanFace,
   ListChecks,
-  History,
-  ChevronRight
+  History
 } from 'lucide-react';
 
 const DETAIL_TABS: TabItem[] = [

@@ -3,7 +3,7 @@ import { CaseItem } from '../types';
 import { api } from '../services/api';
 import { RiskBadge } from '../components/RiskBadge';
 import { ScrollShadowX } from '../components/ScrollShadowX';
-import { FileText, Search, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
+import { FileText, Search, ChevronRight, RefreshCw } from 'lucide-react';
 import { SectionHeading } from '../components/SectionHeading';
 import { ScrollReveal } from '../components/ScrollReveal';
 
